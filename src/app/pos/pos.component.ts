@@ -1,10 +1,12 @@
-import { HttpResponse } from '@angular/common/http';
+import { HttpErrorResponse, HttpResponse } from '@angular/common/http';
 import {
   AfterViewInit,
   Component,
   ElementRef,
   OnInit,
   ViewChild,
+  HostListener,
+  ChangeDetectorRef
 } from '@angular/core';
 import {
   UntypedFormGroup,
@@ -42,6 +44,11 @@ import { BaseComponent } from '../base.component';
 import { CustomerService } from '../customer/customer.service';
 import { ProductService } from '../product/product.service';
 import { SalesOrderService } from '../sales-order/sales-order.service';
+import { CommonError } from '@core/error-handler/common-error';
+import { Guid } from 'guid-typescript';
+import { SalesOrderListComponent } from '../sales-order/sales-order-list/sales-order-list.component';
+import { forkJoin, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 
 @Component({
   selector: 'app-pos',
@@ -51,8 +58,7 @@ import { SalesOrderService } from '../sales-order/sales-order.service';
 })
 export class PosComponent
   extends BaseComponent
-  implements OnInit, AfterViewInit
-{
+  implements OnInit, AfterViewInit {
   salesOrderForm: UntypedFormGroup;
   products: Product[] = [];
   filterProducts: Product[] = [];
@@ -75,7 +81,17 @@ export class PosComponent
   isEdit: boolean = false;
   baseUrl = environment.apiUrl;
   isFromScanner = false;
+  currentShiftId: number = 0;
+  amountPaid: number = 0;
+  balance: number = 0;
+  currentOrderNumber: string;
+  searchOrderNumber: string = '';
+  taxValue: number[] = [];
   @ViewChild('filterValue') filterValue: ElementRef;
+  salesOrderForInvoice: SalesOrder;
+  currentSalesOrder: SalesOrder;
+  @ViewChild("printSection") printSectionRef: ElementRef;
+
   get salesOrderItemsArray(): UntypedFormArray {
     return <UntypedFormArray>this.salesOrderForm.get('salesOrderItems');
   }
@@ -91,7 +107,8 @@ export class PosComponent
     private quantitiesUnitPricePipe: QuantitiesUnitPricePipe,
     private quantitiesUnitPriceTaxPipe: QuantitiesUnitPriceTaxPipe,
     public translationService: TranslationService,
-    private clonerService: ClonerService
+    private clonerService: ClonerService,
+    private changeDetector: ChangeDetectorRef
   ) {
     super(translationService);
     this.getLangDir();
@@ -106,10 +123,17 @@ export class PosComponent
     this.customerNameChangeValue();
     this.getNewSalesOrderNumber();
     this.salesOrderForm.get('filterProductValue').setValue('');
+    this.salesOrderForm.get('amountPaid').valueChanges.subscribe(value => {
+      this.calculateBalance();
+    });
+
   }
 
   ngAfterViewInit(): void {
     this.filterValue.nativeElement.focus();
+    this.salesOrderForm.get('amountPaid').valueChanges.subscribe(value => {
+      this.calculateBalance();
+    });
   }
 
   createSalesOrder() {
@@ -130,6 +154,7 @@ export class PosComponent
           termAndCondition: [''],
           salesOrderItems: this.fb.array([]),
           filterProductValue: [''],
+          amountPaid: [0, Validators.min(0)]
         });
       });
   }
@@ -198,17 +223,18 @@ export class PosComponent
   }
 
   createSalesOrderItem(index: number, product: Product) {
-    const taxs = product.productTaxes.map((c) => c.taxId);
+    const taxs = product.productTaxes ? product.productTaxes.map((c) => c.taxId) : [];
     const formGroup = this.fb.group({
-      productId: [product.id],
+      productId: [product.id || product.id],
       warehouseId: [product.warehouseId],
-      unitPrice: [product.salesPrice, [Validators.required, Validators.min(0)]],
+      unitPrice: [product.salesPrice || product.salesPrice, [Validators.required, Validators.min(0)]],
       quantity: [1, [Validators.required, Validators.min(1)]],
       taxValue: [taxs],
       unitId: [product.unitId, [Validators.required]],
       discountPercentage: [0, [Validators.min(0)]],
-      productName: [product.name],
+      productName: [product.name || product.name],
     });
+
     this.unitsMap[index] = this.unitConversationlist.filter(
       (c) => c.id == product.unitId || c.parentId == product.unitId
     );
@@ -350,6 +376,8 @@ export class PosComponent
         this.salesOrderForm.patchValue({
           orderNumber: salesOrder.orderNumber,
         });
+        this.currentOrderNumber = salesOrder.orderNumber
+        this.getAllTotal();
       }
     });
   }
@@ -432,6 +460,7 @@ export class PosComponent
             this.toastrService.success(
               this.translationService.getValue('SALES_ORDER_ADDED_SUCCESSFULLY')
             );
+            this.generateInvoice(c);
             if (isSaveAndNew) {
               this.router.navigate(['/pos']);
               this.ngOnInit();
@@ -449,7 +478,7 @@ export class PosComponent
     });
   }
 
-  buildSalesOrder() {
+  buildSalesOrder(): SalesOrder {
     const salesOrder: SalesOrder = {
       id: this.salesOrder ? this.salesOrder.id : '',
       orderNumber: this.salesOrderForm.get('orderNumber').value,
@@ -470,6 +499,9 @@ export class PosComponent
     const salesOrderItems = this.salesOrderForm.get('salesOrderItems').value;
     if (salesOrderItems && salesOrderItems.length > 0) {
       salesOrderItems.forEach((so) => {
+        // Ensure taxValue is an array
+        const taxValueArray = Array.isArray(so.taxValue) ? so.taxValue : [];
+
         salesOrder.salesOrderItems.push({
           discount: parseFloat(
             this.quantitiesUnitPriceTaxPipe.transform(
@@ -488,28 +520,373 @@ export class PosComponent
               so.quantity,
               so.unitPrice,
               so.discountPercentage,
-              so.taxValue,
+              taxValueArray,
               this.taxsMap[0]
             )
           ),
           unitPrice: parseFloat(so.unitPrice),
-          salesOrderItemTaxes: so.taxValue
-            ? [
-                ...so.taxValue.map((element) => {
-                  const salesOrderItemTaxes: SalesOrderItemTax = {
-                    taxId: element,
-                  };
-                  return salesOrderItemTaxes;
-                }),
-              ]
-            : [],
+          salesOrderItemTaxes: taxValueArray.map((element) => ({
+            taxId: element,
+          })),
         });
       });
     }
+
     return salesOrder;
   }
 
-  onSalesOrderList() {
-    this.router.navigate(['/']);
+  OnCancel() {
+    this.router.navigate(['/pos']);
+    this.ngOnInit();
+  }
+
+  //new methods added august
+  onSearchBillNumber(orderNumber: string) {
+    const formattedOrderNumber = `SO#${orderNumber.trim()}`;
+
+    this.salesOrderService.getSalesOrderByOrderNumber(formattedOrderNumber).subscribe(
+      (salesOrder: SalesOrder) => {
+        console.log('Sales Order Received:', salesOrder);
+        this.populateForm(salesOrder).then(() => {
+        }).catch(error => {
+          console.error('Error populating form:', error);
+        });
+        this.currentOrderNumber = formattedOrderNumber;
+        this.salesOrder = salesOrder;
+      },
+      error => {
+        console.error('Error fetching sales order:', error);
+      }
+    );
+  }
+
+
+  onPreviousBill() {
+    this.salesOrderService.getPreviousSalesOrder(this.currentOrderNumber).subscribe((salesOrder: SalesOrder) => {
+      if (salesOrder) {
+        this.populateForm(salesOrder).then(result => {
+          console.log("Populated Sales Order Items with Taxes:", result);
+          this.currentOrderNumber = salesOrder.orderNumber;
+          this.salesOrder = salesOrder;
+        }).catch(error => {
+          console.error("Error populating form:", error);
+        });
+      }
+    });
+  }
+
+  onNextBill() {
+    this.salesOrderService.getNextSalesOrder(this.currentOrderNumber).subscribe({
+      next: (salesOrder: SalesOrder | null) => {
+        if (salesOrder) {
+          this.populateForm(salesOrder).then(result => {
+            console.log("Populated Sales Order Items with Taxes:", result);
+            this.currentOrderNumber = salesOrder.orderNumber;
+            this.salesOrder = salesOrder;
+          }).catch(error => {
+            console.error("Error populating form:", error);
+          });
+        } else {
+          this.router.navigate(['/pos']);
+          this.ngOnInit();
+        }
+      },
+      error: (error) => {
+        console.error('An error occurred:', error);
+      }
+    });
+  }
+
+  populateForm(salesOrder: SalesOrder): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (!salesOrder) {
+        reject('No sales order provided');
+        return;
+      }
+
+      // Patch sales order details
+      this.salesOrderForm.patchValue({
+        id: salesOrder.id,
+        orderNumber: salesOrder.orderNumber,
+        deliveryDate: salesOrder.deliveryDate,
+        deliveryStatus: salesOrder.deliveryStatus,
+        isSalesOrderRequest: salesOrder.isSalesOrderRequest,
+        soCreatedDate: salesOrder.soCreatedDate,
+        salesOrderStatus: salesOrder.salesOrderStatus,
+        customerId: salesOrder.customerId,
+        totalAmount: salesOrder.totalAmount,
+        totalDiscount: salesOrder.totalDiscount,
+        totalTax: salesOrder.totalTax,
+        note: salesOrder.note,
+        termAndCondition: salesOrder.termAndCondition,
+      });
+
+      const salesOrderItems = salesOrder.salesOrderItems || [];
+      const productIds: string[] = salesOrderItems.map(item => item.productId);
+
+      if (productIds.length > 0) {
+        const id: string = salesOrder.id;
+        this.salesOrderService.getTaxIdsForProducts(productIds, id).subscribe((taxIdsForProducts: any) => {
+          const taxesByItemId = taxIdsForProducts.reduce((acc, tax) => {
+            if (!acc[tax.salesOrderItemId]) {
+              acc[tax.salesOrderItemId] = [];
+            }
+            acc[tax.salesOrderItemId].push(tax);
+            return acc;
+          }, {});
+
+          // Clear existing items in the form array
+          this.salesOrderItemsArray.clear();
+
+          salesOrderItems.forEach((item, index) => {
+            const itemWithTaxes = {
+              ...item,
+              salesOrderItemTaxes: taxesByItemId[item.id] || []
+            };
+
+            // Add form group to the form array
+            this.salesOrderItemsArray.push(this.createSalesOrderItemFromSalesOrderItem(index, itemWithTaxes));
+            this.setUnitConversationForProduct(item.unitId, index);
+          });
+
+          this.getAllTotal();
+          resolve(salesOrderItems);
+        }, error => {
+          reject(error);
+        });
+      } else {
+        // Clear existing items in the form array
+        this.salesOrderItemsArray.clear();
+
+        salesOrderItems.forEach((item, index) => {
+          // Add form group to the form array
+          this.salesOrderItemsArray.push(this.createSalesOrderItemFromSalesOrderItem(index, item));
+          this.setUnitConversationForProduct(item.unitId, index);
+        });
+
+        this.getAllTotal();
+        resolve(salesOrderItems);
+      }
+    });
+  }
+
+  createSalesOrderItemFromSalesOrderItem(index: number, item: SalesOrderItem) {
+    const formGroup = this.fb.group({
+      productId: [item.productId],
+      warehouseId: [item.warehouseId],
+      unitPrice: [item.unitPrice, [Validators.required, Validators.min(0)]],
+      quantity: [item.quantity, [Validators.required, Validators.min(1)]],
+      taxValue: [item.salesOrderItemTaxes.map(tax => tax.taxId)],
+      unitId: [item.unitId, [Validators.required]],
+      discountPercentage: [item.discountPercentage || 0],
+      productName: [item.product?.name],  // Ensure this field is populated
+    });
+
+    console.log("Product Name in FormGroup:", formGroup.value.productName);
+
+    this.unitsMap[index] = this.unitConversationlist.filter(
+      (c) => c.id === item.unitId || c.parentId === item.unitId
+    );
+    this.taxsMap[index] = this.route.snapshot.data['taxs'];
+
+    return formGroup;
+  }
+
+  onSalesOrderReturnSubmit() {
+    debugger
+    if (!this.salesOrderForm.valid) {
+      this.salesOrderForm.markAllAsTouched();
+      return;
+    }
+
+    else {
+      if (this.salesOrder && this.salesOrder.salesOrderStatus === SalesOrderStatusEnum.Return) {
+        this.toastrService.error("Sales Order can't edit becuase it's already approved.");
+        return;
+      }
+      const salesOrder = this.buildSalesOrder();
+      if (salesOrder.id) {
+        this.salesOrderService.updateSalesOrderReturn(salesOrder)
+          .subscribe((c: SalesOrder) => {
+            this.toastrService.success('Sales order return added.');
+            this.router.navigate(['/pos']);
+            this.ngOnInit();
+          })
+      }
+    }
+  }
+
+  startShift(): void {
+    this.salesOrderService.startShift().subscribe(
+      response => {
+        this.toastrService.success('Shift started successfully');
+      },
+      (error: Error) => {
+        this.toastrService.error("Cannot start a new shift. An ongoing shift exists.");
+        console.error('Error starting shift:', error);
+      }
+    );
+  }
+
+  endShift(): void {
+    this.salesOrderService.endShift().subscribe(
+      response => {
+        this.toastrService.success('Shift ended successfully');
+      },
+      (error: Error) => {
+        this.toastrService.error("No ongoing shift found for the user");
+        console.error('Error ending shift:', error);
+      }
+    );
+  }
+
+  generateInvoice(so: SalesOrder) {
+    const soForInvoice = this.clonerService.deepClone<SalesOrder>(so);
+    const salesOrderItems = this.salesOrderService.getSalesOrderItems(so.id)
+    forkJoin({
+      salesOrderItems
+    }).subscribe(response => {
+      console.log(response.salesOrderItems)
+      if (response && Array.isArray(response.salesOrderItems)) {
+        soForInvoice.salesOrderItems = response.salesOrderItems;
+        this.salesOrderForInvoice = soForInvoice;
+        console.log(this.salesOrderForInvoice?.orderNumber)
+      } else {
+        throw new Error('Sales order items not found or invalid format.');
+      }
+      this.printInvoice();
+      console.log("GenerateInvoice", this.salesOrderForInvoice);
+
+    }),
+      catchError(error => {
+        console.error('Error:', error);
+        this.toastrService.error("Failed to generate invoice.");
+        return of({ salesOrderItems: [] });
+      })
+
+  }
+
+  printInvoice() {
+    this.changeDetector.detectChanges();
+
+    // Create a new window for printing
+    const printWindow = window.open('', '', 'width=800,height=600');
+
+    // Set the content of the new window
+    printWindow.document.open();
+    printWindow.document.write(`
+        <html>
+        <head>
+            <title>Invoice</title>
+            <style>
+                @media print {
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        box-shadow: none;
+                        font-family: Arial, sans-serif;
+                        text-align: center; /* Center text in the body */
+                    }
+                    #printSection {
+                        width: 58mm; /* Common width for POS receipts */
+                        padding: 10px;
+                        border: 1px solid #000;
+                        border-radius: 5px;
+                        box-shadow: 0 0 0 1px #000 inset;
+                        color: #000;
+                        box-sizing: border-box;
+                        display: inline-block; /* Center the div horizontally */
+                        text-align: left; /* Align text to the left within the div */
+                    }
+                    #printSection table {
+                        width: 70%;
+                        border-collapse: collapse;
+                        margin: 10px 0;
+                    }
+                    #printSection th, #printSection td {
+                        border: 1px solid #000;
+                        padding: 5px;
+                        text-align: left;
+                    }
+                    #printSection th {
+                        background-color: #f2f2f2;
+                    }
+                    .qty-col {
+                        width: 10%; /* Adjust width for qty column */
+                    }
+                }
+            </style>
+        </head>
+        <body onload="window.print();window.close()">
+            <div id="printSection">
+                <h1>SHEHAB CENTER</h1>
+                <p id="order_number">Invoice No: ${this.salesOrderForInvoice?.orderNumber}</p>
+                <p>Date: ${new Date(this.salesOrderForInvoice?.soCreatedDate).toLocaleDateString()}</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th class="qty-col">Qty</th>
+                            <th>Price</th>
+                            <th>Tax</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${this.salesOrderForInvoice?.salesOrderItems.map(item => `
+                            <tr>
+                                <td>${item.productName}</td>
+                                <td class="qty-col">${item.quantity}</td>
+                                <td>${item.unitPrice}</td>
+                                <td>${item.taxValue}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <p>Total Discount: ${this.salesOrderForInvoice?.totalDiscount}</p>
+                <p>Total Tax: ${this.salesOrderForInvoice?.totalTax}</p>
+                <p>Total Amount: ${this.salesOrderForInvoice?.totalAmount}</p>
+            </div>
+        </body>
+        </html>
+    `);
+    printWindow.focus();
+    printWindow.print();
+    printWindow.document.close();
+
+    // Wait for the new window to be fully loaded before printing
+    // printWindow.onload = function() {
+
+    //     // Clean up the new window after printing
+    //     printWindow.onafterprint = function() {
+    //         printWindow.close();
+    //     };
+    // };
+}
+
+
+
+  private calculateBalance(): void {
+    this.amountPaid = this.salesOrderForm.get('amountPaid').value || 0;
+    this.balance = this.amountPaid - this.grandTotal;
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  handleKeyboardEvent(event: KeyboardEvent) {
+    if (event.key === 'F1') {
+      event.preventDefault();
+      this.onSaveAndNew();
+    }
+    else if (event.key === 'F4') {
+      event.preventDefault();
+      this.OnCancel();
+    }
+    else if (event.key === 'F7') {
+      event.preventDefault();
+      this.onSalesOrderReturnSubmit();
+    }
+    else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.router.navigate(['/']);
+    }
   }
 }

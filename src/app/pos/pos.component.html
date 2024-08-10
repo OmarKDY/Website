@@ -6,8 +6,9 @@
                     <div class="col-sm-12 col-12 order-2 order-md-1 col-md-8">
                         <div class="card">
                             <div class="card-body">
-                                <div class="col-sm-12 col-md-12 col-lg-12">
-                                    <label class="text-danger">{{'CUSTOMER_NAME' | translate}} *</label>
+                                <!-- <div class="col-sm-12 col-md-12 col-lg-12">
+
+                                     <label class="text-danger">{{'CUSTOMER_NAME' | translate}} *</label>
                                     <div role="group" class="input-group input-customer">
                                         <mat-select formControlName="customerId" [dir]="langDir"
                                             placeholder="{{'SELECT_CUSTOMER' | translate}}" class="form-control">
@@ -30,7 +31,41 @@
                                             {{'CUSTOMER_NAME_IS_REQUIRED' | translate}}
                                         </div>
                                     </div>
-                                </div><br>
+                                </div><br> -->
+                                <div>
+                                    <div class="row mb-2">
+                                        <div class="col-sm-4 col-md-4 col-lg-4">
+                                            <input (keydown.enter)="onSearchBillNumber(orderInput.value)" #orderInput
+                                                type="text" placeholder="Enter Order Number"
+                                                class="form-control w-100 ng-touched">
+                                            <!-- <button (click)="onSearchBillNumber(orderInput.value)">Search</button> -->
+                                        </div>
+                                        <div class="col-2 text-right">
+                                            <button type="button" class="btn btn-info btn-sm"
+                                                (click)="onPreviousBill()">
+                                                <i class="fas fa-arrow-left"></i> {{'PREV_BILL' | translate}}
+                                            </button>
+                                        </div>
+                                        <div class="col-2 text-left">
+                                            <button type="button" class="btn btn-info btn-sm" (click)="onNextBill()">
+                                                <i class="fas fa-arrow-right"></i> {{'NEXT_BILL' | translate}}
+                                            </button>
+                                        </div>
+                                        <div class="col-2 text-right">
+                                            <button type="button" class="btn btn-success btn-sm" (click)="startShift()">
+                                                <i class="fas fa-arrow-left"></i> {{'START_SHIFT' | translate}}
+                                            </button>
+                                        </div>
+                                        <div class="col-2 text-left">
+                                            <button type="button" class="btn btn-dark btn-sm" (click)="endShift()">
+                                                <i class="fas fa-arrow-right"></i> {{'END_SHIFT' | translate}}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+
+
                                 <div class="col-sm-12 col-md-12 col-lg-12">
                                     <div class="row">
                                         <div class="col-sm-12" formArrayName="salesOrderItems">
@@ -44,7 +79,7 @@
                                                                 </th>
                                                                 <th class="table-column-150">
                                                                     {{'UNIT' | translate}}
-                                                                  </th>
+                                                                </th>
                                                                 <th class="table-column-130">
                                                                     {{'PRICE' | translate}}
                                                                 </th>
@@ -74,17 +109,23 @@
                                                                         type="text" autocomplete="off">
                                                                 </td>
                                                                 <td>
-                                                                    <mat-select [dir]="langDir" formControlName="unitId" (selectionChange)="onSelectionChange($event.value,i)" class="form-control">
-                                                                      <mat-option [dir]="langDir" *ngFor="let a of unitsMap[i]" [value]="a.id">
-                                                                        {{a.name}}
-                                                                      </mat-option>
+                                                                    <mat-select [dir]="langDir" formControlName="unitId"
+                                                                        (selectionChange)="onSelectionChange($event.value,i)"
+                                                                        class="form-control">
+                                                                        <mat-option [dir]="langDir"
+                                                                            *ngFor="let a of unitsMap[i]"
+                                                                            [value]="a.id">
+                                                                            {{a.name}}
+                                                                        </mat-option>
                                                                     </mat-select>
-                                                                    <div *ngIf="salesOrderItem.get('unitId').touched && salesOrderItem.get('unitId').errors">
-                                                                    <div class="text-danger" *ngIf="salesOrderItem.get('unitId').errors?.required">
-                                                                      {{'UNIT_IS_REQUIRED' | translate}}
+                                                                    <div
+                                                                        *ngIf="salesOrderItem.get('unitId').touched && salesOrderItem.get('unitId').errors">
+                                                                        <div class="text-danger"
+                                                                            *ngIf="salesOrderItem.get('unitId').errors?.required">
+                                                                            {{'UNIT_IS_REQUIRED' | translate}}
+                                                                        </div>
                                                                     </div>
-                                                                  </div>
-                                                                  </td>
+                                                                </td>
                                                                 <td>
                                                                     <input class="form-control" type="number"
                                                                         (change)="onUnitPriceChange()"
@@ -150,6 +191,7 @@
                                                                         </div>
                                                                     </div>
                                                                 </td>
+
                                                                 <td>
                                                                     {{ salesOrderItem.get('quantity').value |
                                                                     quantitiesunitprice :
@@ -223,26 +265,57 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="row mt-1">
+                                    <div class="col-10 text-right font-weight-bold">
+                                        {{"Amount Paid" | translate}} :
+                                    </div>
+                                    <div class="col-2 text-left font-weight-bold">
+                                        <input class="form-control" type="number" formControlName="amountPaid"
+                                            placeholder="{{'ENTER_AMOUNT_PAID' | translate}}"
+                                            style="width: 100px; height: 25px;">
+                                        <div
+                                            *ngIf="salesOrderForm.get('amountPaid').touched && salesOrderForm.get('amountPaid').errors">
+                                            <div class="text-danger"
+                                                *ngIf="salesOrderForm.get('amountPaid').errors?.required">
+                                                {{'AMOUNT_PAID_IS_REQUIRED' | translate}}
+                                            </div>
+                                            <div class="text-danger"
+                                                *ngIf="salesOrderForm.get('amountPaid').errors?.min">
+                                                {{"AMOUNT_PAID_SHOULD_BE_MORE_THEN_0" | translate}}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row mt-1">
+                                    <div class="col-10 text-right font-weight-bold">
+                                        {{"The remaining amount of" | translate}} :
+                                    </div>
+                                    <div class="col-2 text-right text-success font-weight-bold">
+                                        {{balance | customCurrency}}
+                                    </div>
+                                </div>
                                 <div class="row">
                                     <div class="col-md-12 mb-1 text-center">
-                                        <button type="button" (click)="onSalesOrderSubmit()"
-                                            class="btn btn-success btn-sm m-right-10 "
-                                            *hasClaim="['SO_ADD_SO','SO_UPDATE_SO','SO_RETURN_SO','POS_POS']">
-                                            <i class="fas fa-save"></i> {{'SAVE' | translate}}</button>
                                         <button type="button" (click)="onSaveAndNew()"
-                                            class="btn btn-success btn-sm m-right-10 "
+                                            class="btn btn-success btn-sm m-right-10"
                                             *hasClaim="['SO_ADD_SO','SO_UPDATE_SO','SO_RETURN_SO','POS_POS']">
-                                            <i class="fas fa-save"></i> {{'SAVE_AND_NEW' | translate}}</button>
-                                        <button type="button" (click)="onSalesOrderList()"
-                                            class="btn btn-danger btn-sm"><i class="fas fa-times-circle"></i>
-                                            {{'CANCEL' | translate}}
+                                            <i class="fas fa-save"></i> {{'SAVE_AND_NEW' | translate}}
                                         </button>
+                                        <button type="button" (click)="OnCancel()" class="btn btn-danger btn-sm">
+                                            <i class="fas fa-times-circle"></i> {{'CANCEL' | translate}}
+                                        </button>
+
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-sm-12 col-12 order-1 order-md-2 col-md-4">
+                        <h4>{{ currentOrderNumber }}</h4>
+                        <button type="button" (click)="onSalesOrderReturnSubmit()"
+                            class="btn btn-warning btn-sm m-right-10">
+                            <i class="fas fa-return"></i> {{'Return' | translate}}
+                        </button>
                         <div class="card">
                             <div class="card-body">
                                 <div class="col-sm-12 col-md-12 col-lg-12">
@@ -284,3 +357,34 @@
         <mat-spinner *ngIf="isLoading"></mat-spinner>
     </div>
 </div>
+
+<!-- PRITN-SECTION -->
+<div id="printSection" #printSection style="display: none;">
+    <h1>Shehab Center</h1>
+    <p id="order_number">Invoice No: {{ salesOrderForInvoice?.orderNumber }}</p>
+    <p>Date: {{ salesOrderForInvoice?.soCreatedDate | date }}</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Product Name</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Tax</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let item of salesOrderForInvoice?.salesOrderItems">
+                <td>{{ item.productName }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ item.unitPrice }}</td>
+                <td>{{ item.taxValue }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>Total Discount: {{ salesOrderForInvoice?.totalDiscount }}</p>
+    <p>Total Tax: {{ salesOrderForInvoice?.totalTax }}</p>
+    <p>Total Amount: {{ salesOrderForInvoice?.totalAmount }}</p>
+</div>
+

@@ -25,4 +25,5 @@ export interface SalesOrder {
     paymentStatus?: PaymentStatus
     salesOrderItems: SalesOrderItem[];
     status?: number;
+    isTouched?:boolean
 }

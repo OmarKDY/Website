@@ -1,21 +1,22 @@
-import { HttpClient, HttpEvent, HttpParams, HttpResponse } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpEvent, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { SalesOrder } from '@core/domain-classes/sales-order';
 import { SalesOrderItem } from '@core/domain-classes/sales-order-item';
 import { SalesOrderResourceParameter } from '@core/domain-classes/sales-order-resource-parameter';
+import { User } from '@core/domain-classes/user';
 import { CommonError } from '@core/error-handler/common-error';
 import { CommonHttpErrorService } from '@core/error-handler/common-http-error.service';
-import { Observable } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { Guid } from 'guid-typescript';
+import { Observable, of, throwError } from 'rxjs';
+import { catchError, map, switchMap, tap } from 'rxjs/operators';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SalesOrderService {
 
-
   constructor(private http: HttpClient,
-    private commonHttpErrorService: CommonHttpErrorService) { }
+              private commonHttpErrorService: CommonHttpErrorService) { }
 
   getAllSalesOrder(
     resourceParams: SalesOrderResourceParameter
@@ -76,7 +77,6 @@ export class SalesOrderService {
       .pipe(catchError(this.commonHttpErrorService.handleError));
   }
 
-
   updateSalesOrderReturn(salesOrder: SalesOrder): Observable<SalesOrder | CommonError> {
     const url = `salesOrder/${salesOrder.id}/return`;
     return this.http.put<SalesOrder>(url, salesOrder)
@@ -131,10 +131,95 @@ export class SalesOrderService {
       .set('productId', resourceParams.productId ? resourceParams.productId : '')
       .set('productName', resourceParams.productName ? resourceParams.productName : '')
       .set('customerId', resourceParams.customerId ? resourceParams.customerId : '')
-      .set('isSalesOrderRequest', resourceParams.isSalesOrderRequest)
+      .set('isSalesOrderRequest', resourceParams.isSalesOrderRequest);
     return this.http.get<SalesOrderItem[]>(url, {
       params: customParams,
       observe: 'response'
     });
+  }
+
+  // New methods for previous and next and search sales orders
+  getSalesOrderByOrderNumber(orderNumber: string): Observable<SalesOrder | CommonError> {
+    const url = `salesOrder/byOrderNumber/${encodeURIComponent(orderNumber)}`;
+    return this.http.get<SalesOrder>(url)
+      .pipe(catchError(this.commonHttpErrorService.handleError));
+  }
+
+  getPreviousSalesOrder(orderNumber: string): Observable<SalesOrder | CommonError> {
+    const url = `salesOrder/previous/${encodeURIComponent(orderNumber)}`;
+    return this.http.get<SalesOrder>(url)
+      .pipe(
+        catchError(error => {
+          this.commonHttpErrorService.handleError(error);
+          return throwError(error);
+        })
+      );
+  }
+
+
+  getTaxIdsForProducts(productIds: string[], id: string): Observable<{ [key: string]: string[] }> {
+    return this.http.post<{ [key: string]: string[] }>(`salesOrder/GetTaxIdsForProducts`, { productIds, id });
+}
+
+  
+  getNextSalesOrder(orderNumber: string): Observable<SalesOrder | null> {
+    const url = `salesOrder/next/${encodeURIComponent(orderNumber)}`;
+    return this.http.get<SalesOrder>(url, { observe: 'response' })
+      .pipe(
+        map(response => {
+          if (response.status === 204) {
+            return null;
+          }
+          return response.body as SalesOrder;
+        })
+      );
+  }
+
+  getCurrentUser(): Observable<User | CommonError> {
+    const url = `user/GetCurrentUser`;
+    return this.http.get<User>(url).pipe(
+      catchError(error => {
+        // Return an observable of CommonError
+        return of(this.commonHttpErrorService.handleError(error) as unknown as CommonError);
+      })
+    );
+  }
+
+  startShift(): Observable<any> {
+    const url = `salesOrder/StartShift`;
+    return this.http.post<any>(url, {}).pipe(
+      catchError((error: HttpErrorResponse) => {
+        console.error('Error starting shift:', error);
+        let errorMessage = 'An error occurred while starting the shift.';
+        if (error.status === 400) {
+          errorMessage = 'Cannot start a new shift. An ongoing shift exists.';
+        } else if (error.error && typeof error.error.message === 'string') {
+          errorMessage = error.error.message;
+        }
+        return throwError(() => new Error(errorMessage));
+      })
+    );
+  }
+  
+
+  endShift(): Observable<any | CommonError> {
+    const url = `salesOrder/EndShift`;
+    return this.http.post<any>(url, {}).pipe(
+      catchError((error: HttpErrorResponse) => {
+        console.error('Error starting shift:', error);
+        let errorMessage = 'An error occurred while starting the shift.';
+        if (error.status === 404) {
+          errorMessage = 'No ongoing shift found for the user.';
+        } else if (error.error && typeof error.error.message === 'string') {
+          errorMessage = error.error.message;
+        }
+        return throwError(() => new Error(errorMessage));
+      })
+    );
+  }
+  
+
+  private isCommonError(value: any): value is CommonError {
+    return (value as CommonError).messages !== undefined;
   }
 }
