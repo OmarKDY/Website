@@ -13,6 +13,7 @@ import {
   UntypedFormArray,
   UntypedFormBuilder,
   Validators,
+  FormArray,
 } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Customer } from '@core/domain-classes/customer';
@@ -89,7 +90,6 @@ export class PosComponent
   taxValue: number[] = [];
   @ViewChild('filterValue') filterValue: ElementRef;
   salesOrderForInvoice: SalesOrder;
-  currentSalesOrder: SalesOrder;
   @ViewChild("printSection") printSectionRef: ElementRef;
 
   get salesOrderItemsArray(): UntypedFormArray {
@@ -443,34 +443,55 @@ export class PosComponent
     this.onSalesOrderSubmit(true);
   }
 
+  // Method for submitting the sales order
   onSalesOrderSubmit(isSaveAndNew = false) {
+    // Check if the sales order form is valid
     if (!this.salesOrderForm.valid) {
-      this.salesOrderForm.markAllAsTouched();
+      this.salesOrderForm.markAllAsTouched(); // Mark fields as touched to show validation errors
     } else {
+      // Build the sales order object from the form data
       const salesOrder = this.buildSalesOrder();
+
+      // Retrieve sales order items from the form
       let salesOrderItems = this.salesOrderForm.get('salesOrderItems').value;
+
+      // Ensure there is at least one product selected
       if (salesOrderItems && salesOrderItems.length == 0) {
         this.toastrService.error(
           this.translationService.getValue('PLEASE_SELECT_ATLEASE_ONE_PRODUCT')
         );
       } else {
-        this.salesOrderService
-          .addSalesOrder(salesOrder)
-          .subscribe((c: SalesOrder) => {
+        // Add the sales order using the service and subscribe to the result
+        this.salesOrderService.addSalesOrder(salesOrder)
+          .subscribe((response: SalesOrder) => {
+            // After successfully adding the sales order, the response contains the created sales order with its id
             this.toastrService.success(
               this.translationService.getValue('SALES_ORDER_ADDED_SUCCESSFULLY')
             );
-            this.generateInvoice(c);
+
+            // Now you can access the id from the response
+            const newSalesOrderId = response.id;
+
+            // Optionally generate an invoice or perform other actions with the newSalesOrderId
+            this.generateInvoice(response);
+
+            // Navigate based on the 'isSaveAndNew' flag
             if (isSaveAndNew) {
               this.router.navigate(['/pos']);
-              this.ngOnInit();
+              this.ngOnInit(); // Reinitialize the component for a new sales order
             } else {
               this.router.navigate(['/sales-order/list']);
             }
+          }, (error) => {
+            // Handle error scenario
+            this.toastrService.error(
+              this.translationService.getValue('FAILED_TO_ADD_SALES_ORDER')
+            );
           });
       }
     }
   }
+
   reloadCurrentRoute() {
     let currentUrl = this.router.url;
     this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
@@ -861,9 +882,12 @@ export class PosComponent
     //         printWindow.close();
     //     };
     // };
+  }
+
+  onRemoveAllSalesOrderItems(): void {
+    this.salesOrderItemsArray.clear();
+    // this.getAllTotal();
 }
-
-
 
   private calculateBalance(): void {
     this.amountPaid = this.salesOrderForm.get('amountPaid').value || 0;

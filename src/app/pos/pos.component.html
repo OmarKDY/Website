@@ -74,6 +74,14 @@
                                                     <div class="table-responsive">
                                                         <table class="table table-bordered table-hover">
                                                             <tr>
+                                                                <td>
+                                                                    <button type="button"
+                                                                        *ngIf="salesOrderItemsArray?.controls.length !== 0"
+                                                                        (click)="onRemoveAllSalesOrderItems()"
+                                                                        mat-icon-button aria-label="Remove All Items">
+                                                                        <mat-icon class="btn-danger">delete_forever</mat-icon>
+                                                                    </button>
+                                                                </td>
                                                                 <th class="table-column-200">
                                                                     {{'PRODUCT' | translate}}
                                                                 </th>
@@ -95,14 +103,18 @@
                                                                 <th class="table-column-150">
                                                                     {{'TOTAL' | translate}}
                                                                 </th>
-                                                                <th style="text-align: center;">
-                                                                    <i class="fas fa-trash-alt"
-                                                                        style="opacity:0.5; filter:alpha(opacity=50);"></i>
-                                                                </th>
                                                             </tr>
                                                             <tr [formGroupName]="i"
                                                                 *ngFor="let salesOrderItem of salesOrderItemsArray?.controls; let i = index">
-
+                                                                <td>
+                                                                    <button type="button"
+                                                                        *ngIf="salesOrderItemsArray?.controls.length !==1"
+                                                                        (click)="onRemoveSalesOrderItem(i)"
+                                                                        mat-icon-button aria-label="Action">
+                                                                        <mat-icon class="btn-danger">delete_forever
+                                                                        </mat-icon>
+                                                                    </button>
+                                                                </td>
                                                                 <td>
                                                                     <input class="form-control w-100" disabled
                                                                         formControlName="productName" focused="'true'"
@@ -211,15 +223,7 @@
                                                                         customCurrency }}
                                                                     </div>
                                                                 </td>
-                                                                <td>
-                                                                    <button type="button"
-                                                                        *ngIf="salesOrderItemsArray?.controls.length !==1"
-                                                                        (click)="onRemoveSalesOrderItem(i)"
-                                                                        mat-icon-button aria-label="Action">
-                                                                        <mat-icon class="btn-danger">delete_forever
-                                                                        </mat-icon>
-                                                                    </button>
-                                                                </td>
+
                                                             </tr>
                                                         </table>
                                                     </div>
@@ -387,4 +391,3 @@
     <p>Total Tax: {{ salesOrderForInvoice?.totalTax }}</p>
     <p>Total Amount: {{ salesOrderForInvoice?.totalAmount }}</p>
 </div>
-
