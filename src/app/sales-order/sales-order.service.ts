@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { SalesOrder } from '@core/domain-classes/sales-order';
 import { SalesOrderItem } from '@core/domain-classes/sales-order-item';
 import { SalesOrderResourceParameter } from '@core/domain-classes/sales-order-resource-parameter';
+import { SalesSummaryDto } from '@core/domain-classes/salesSummaryDto';
 import { User } from '@core/domain-classes/user';
 import { CommonError } from '@core/error-handler/common-error';
 import { CommonHttpErrorService } from '@core/error-handler/common-http-error.service';
@@ -209,6 +210,28 @@ export class SalesOrderService {
     );
   }
 
+  GetLatestShift(): Observable<boolean> {
+    const url = `salesOrder/GetLatestShift`;
+    return this.http.get<any>(url).pipe(
+      catchError((error: HttpErrorResponse) => {
+        console.error('Error checking latest ongoing shift:', error);
+        let errorMessage = 'An error occurred while checking for an latest ongoing shift.';
+        return throwError(() => new Error(errorMessage));
+      })
+    );
+  }
+
+  checkOngoingShift(): Observable<boolean> {
+    const url = `salesOrder/CheckOngoingShift`;
+    return this.http.get<boolean>(url).pipe(
+      catchError((error: HttpErrorResponse) => {
+        console.error('Error checking ongoing shift:', error);
+        let errorMessage = 'An error occurred while checking for an ongoing shift.';
+        return throwError(() => new Error(errorMessage));
+      })
+    );
+  }
+
   startShift(): Observable<any> {
     const url = `salesOrder/StartShift`;
     return this.http.post<any>(url, {}).pipe(
@@ -241,7 +264,9 @@ export class SalesOrderService {
       })
     );
   }
-
+  getSalesSummaryAsync(): Observable<SalesSummaryDto> {
+    return this.http.get<SalesSummaryDto>(`salesOrder/GetSalesSummaryAsync`);
+  }
 
   private isCommonError(value: any): value is CommonError {
     return (value as CommonError).messages !== undefined;
@@ -250,19 +275,28 @@ export class SalesOrderService {
 
   // Method to send the sales order to the server
   private sendOrderToServer(order: SalesOrder): Observable<SalesOrder> {
-    debugger
     const url = `salesOrder`;
-    return this.http.post<SalesOrder>(url, order)
-      .pipe(
-        tap(response => {
-          // this.toastr.success('Sales order saved successfully.');
-        }),
-        catchError(error => {
-          this.toastr.error('Failed to save sales order.');
-          this.storeOrderLocally(order);
-          return EMPTY;
-        })
-      );
+  
+    // Chain the order number retrieval with the order submission
+    return this.getNewSalesOrderNumber().pipe(
+      switchMap(orderNumber => {
+        // Assign the retrieved order number to the order object
+        order.orderNumber = orderNumber.orderNumber;
+  
+        // Return the observable that posts the sales order to the server
+        return this.http.post<SalesOrder>(url, order);
+      }),
+      tap(response => {
+        // Optional: Success message or further processing
+        // this.toastr.success('Sales order saved successfully.');
+      }),
+      catchError(error => {
+        // Handle error, store order locally if needed
+        this.toastr.error('Failed to save sales order.');
+        this.storeOrderLocally(order); // Store locally on failure
+        return EMPTY; // Return EMPTY observable to terminate the chain
+      })
+    );
   }
 
   // Method to store the sales order locally in localStorage
@@ -332,10 +366,8 @@ export class SalesOrderService {
                     // Optionally, remove the order from local storage after successful sync
                     this.removeOrderFromLocalStorage(order);
 
-                    // Increment the sync count
                     syncCount++;
 
-                    // If all orders have been synced, resolve the promise
                     if (syncCount === salesOrders.length) {
                         console.log('All orders synced successfully');
                         resolve();

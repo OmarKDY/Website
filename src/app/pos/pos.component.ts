@@ -50,6 +50,7 @@ import { Guid } from 'guid-typescript';
 import { SalesOrderListComponent } from '../sales-order/sales-order-list/sales-order-list.component';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
+import * as XLSX from 'xlsx';
 
 @Component({
   selector: 'app-pos',
@@ -88,9 +89,18 @@ export class PosComponent
   currentOrderNumber: string;
   searchOrderNumber: string = '';
   taxValue: number[] = [];
+  isVisa: boolean = false;
   @ViewChild('filterValue') filterValue: ElementRef;
   salesOrderForInvoice: SalesOrder;
+  casher: object;
+  salesSummary: any = {};
+  drawerBalance: number = 0;
+  deficit: number = 0;
   @ViewChild("printSection") printSectionRef: ElementRef;
+  @ViewChild('barcodeInput') barcodeInput!: ElementRef;
+  enteredPassword: string = '';
+  modalCallback: Function | null = null;
+  currentShift: any;
 
   get salesOrderItemsArray(): UntypedFormArray {
     return <UntypedFormArray>this.salesOrderForm.get('salesOrderItems');
@@ -126,7 +136,15 @@ export class PosComponent
     this.salesOrderForm.get('amountPaid').valueChanges.subscribe(value => {
       this.calculateBalance();
     });
-
+    this.setFocusOnBarcodeInput();
+    this.casher = JSON.parse(localStorage.getItem("authObj")).firstName;
+    this.isVisa = false;
+    this.amountPaid = 0
+      // Ensure ShiftId is a number
+  const shiftId = localStorage.getItem('shiftId');
+  if (shiftId) {
+    this.currentShift = { ShiftId: Number(shiftId) };
+  }
   }
 
   ngAfterViewInit(): void {
@@ -134,6 +152,7 @@ export class PosComponent
     this.salesOrderForm.get('amountPaid').valueChanges.subscribe(value => {
       this.calculateBalance();
     });
+    this.setFocusOnBarcodeInput();
   }
 
   createSalesOrder() {
@@ -154,8 +173,11 @@ export class PosComponent
           termAndCondition: [''],
           salesOrderItems: this.fb.array([]),
           filterProductValue: [''],
-          amountPaid: [0, Validators.min(0)]
+          amountPaid: [0, Validators.min(0)],
+          IsVisa: [this.isVisa],
+          ShiftId: this.currentShift ? Number(this.currentShift.ShiftId) : null,
         });
+        console.log("the current shift",this.currentShift)
       });
   }
 
@@ -190,10 +212,12 @@ export class PosComponent
       this.salesOrderItemsArray.controls[index].patchValue({
         unitPrice: price,
       });
+      this.getAllTotal();
     } else {
       this.salesOrderItemsArray.controls[index].patchValue({
         unitPrice: product.salesPrice,
       });
+      this.getAllTotal();
     }
   }
 
@@ -440,57 +464,91 @@ export class PosComponent
   }
 
   onSaveAndNew() {
+    this.changeDetector.detectChanges();
     this.onSalesOrderSubmit(true);
   }
 
-  // Method for submitting the sales order
-  onSalesOrderSubmit(isSaveAndNew = false) {
-    // Check if the sales order form is valid
-    if (!this.salesOrderForm.valid) {
-      this.salesOrderForm.markAllAsTouched(); // Mark fields as touched to show validation errors
-    } else {
-      // Build the sales order object from the form data
-      const salesOrder = this.buildSalesOrder();
+// Method to start a shift and submit a sales order
+onSalesOrderSubmit(isSaveAndNew = false) {
+  if (!this.salesOrderForm.valid) {
+    this.salesOrderForm.markAllAsTouched(); // Mark fields as touched to show validation errors
+    return;
+  }
 
-      // Retrieve sales order items from the form
-      let salesOrderItems = this.salesOrderForm.get('salesOrderItems').value;
+  const salesOrder = this.buildSalesOrder();
+  let salesOrderItems = this.salesOrderForm.get('salesOrderItems').value;
 
-      // Ensure there is at least one product selected
-      if (salesOrderItems && salesOrderItems.length == 0) {
-        this.toastrService.error(
-          this.translationService.getValue('PLEASE_SELECT_ATLEASE_ONE_PRODUCT')
+  if (salesOrderItems && salesOrderItems.length == 0) {
+    this.toastrService.error(
+      this.translationService.getValue('PLEASE_SELECT_ATLEAST_ONE_PRODUCT')
+    );
+    return;
+  }
+
+  if (isSaveAndNew) {
+    this.getNewSalesOrderNumber();
+    salesOrder.orderNumber = this.currentOrderNumber;
+  }
+
+  // Get the ShiftId from localStorage if it exists
+  let shiftId = localStorage.getItem('shiftId');
+
+  this.salesOrderService.checkOngoingShift().pipe(
+    switchMap((hasOngoingShift: boolean) => {
+      console.log("Has ongoing shift: ", hasOngoingShift);
+  
+      if (!hasOngoingShift) {
+        // No ongoing shift, start a new shift
+        return this.salesOrderService.startShift().pipe(
+          tap((newShift: any) => {
+            console.log("New shift started with ID: ", newShift.shiftId);
+            localStorage.setItem('shiftId', newShift.shiftId);
+            salesOrder.ShiftId = newShift.shiftId; // Assign new shift ID
+            this.currentShift = newShift;
+          })
         );
       } else {
-        // Add the sales order using the service and subscribe to the result
-        this.salesOrderService.addSalesOrder(salesOrder)
-          .subscribe((response: SalesOrder) => {
-            // After successfully adding the sales order, the response contains the created sales order with its id
-            this.toastrService.success(
-              this.translationService.getValue('SALES_ORDER_ADDED_SUCCESSFULLY')
-            );
-
-            // Now you can access the id from the response
-            const newSalesOrderId = response.id;
-
-            // Optionally generate an invoice or perform other actions with the newSalesOrderId
-            this.generateInvoice(response);
-
-            // Navigate based on the 'isSaveAndNew' flag
-            if (isSaveAndNew) {
-              this.router.navigate(['/pos']);
-              this.ngOnInit(); // Reinitialize the component for a new sales order
-            } else {
-              this.router.navigate(['/sales-order/list']);
-            }
-          }, (error) => {
-            // Handle error scenario
-            this.toastrService.error(
-              this.translationService.getValue('FAILED_TO_ADD_SALES_ORDER')
-            );
-          });
+        // Ongoing shift exists, fetch the latest shift
+        return this.salesOrderService.GetLatestShift().pipe(
+          tap((latestShift: any) => {
+            console.log("Using existing shift with ID: ", latestShift.shiftId);
+            localStorage.setItem('shiftId', latestShift.shiftId);
+            salesOrder.ShiftId = latestShift.shiftId; // Use existing shift ID
+            this.currentShift = latestShift;
+          })
+        );
       }
+    }),
+    switchMap(() => {
+      // Now add the sales order with the associated shiftId
+      console.log("Assigned ShiftId to SalesOrder:", salesOrder.ShiftId);
+      return this.salesOrderService.addSalesOrder(salesOrder);
+    })
+  ).subscribe(
+    (response: SalesOrder) => {
+      this.toastrService.success(
+        this.translationService.getValue('SALES_ORDER_ADDED_SUCCESSFULLY')
+      );
+  
+      const newSalesOrderId = response.id;
+      this.generateInvoice(response);
+  
+      if (isSaveAndNew) {
+        this.router.navigate(['/pos']);
+        this.ngOnInit(); // Reinitialize the component for a new sales order
+      } else {
+        this.router.navigate(['/sales-order/list']);
+      }
+    },
+    (error) => {
+      this.toastrService.error(
+        this.translationService.getValue('FAILED_TO_ADD_SALES_ORDER')
+      );
+      console.error('Error adding sales order:', error);
     }
-  }
+  );
+}
+
 
   reloadCurrentRoute() {
     let currentUrl = this.router.url;
@@ -498,7 +556,15 @@ export class PosComponent
       this.router.navigate([currentUrl]);
     });
   }
+  toggleVisaCheckbox() {
+    this.isVisa = !this.isVisa;
+    this.onVisaCheckboxChange();
+  }
 
+  onVisaCheckboxChange() {
+    // Handle the change in the checkbox here
+    console.log('Visa checkbox changed:', this.isVisa);
+  }
   buildSalesOrder(): SalesOrder {
     const salesOrder: SalesOrder = {
       id: this.salesOrder ? this.salesOrder.id : '',
@@ -515,8 +581,10 @@ export class PosComponent
       note: this.salesOrderForm.get('note').value,
       termAndCondition: this.salesOrderForm.get('termAndCondition').value,
       salesOrderItems: [],
+      IsVisa: this.isVisa,
+      ShiftId: this.currentShift ? Number(this.currentShift.ShiftId) : null,
     };
-
+    console.log('isVisaChecked:', this.isVisa); // Debug line
     const salesOrderItems = this.salesOrderForm.get('salesOrderItems').value;
     if (salesOrderItems && salesOrderItems.length > 0) {
       salesOrderItems.forEach((so) => {
@@ -640,6 +708,8 @@ export class PosComponent
         totalTax: salesOrder.totalTax,
         note: salesOrder.note,
         termAndCondition: salesOrder.termAndCondition,
+        IsVisa: this.isVisa,
+        ShiftId: this.currentShift ? Number(this.currentShift.ShiftId) : null,
       });
 
       const salesOrderItems = salesOrder.salesOrderItems || [];
@@ -713,27 +783,145 @@ export class PosComponent
     return formGroup;
   }
 
+  // Show modal and set the callback function
+  showModal(action: () => void) {
+    this.enteredPassword = '';
+    this.modalCallback = action;
+    const modal = document.getElementById("passwordModal");
+    if (modal) {
+      modal.style.display = "flex";
+    }
+  }
+
+  closeModal() {
+    const modal = document.getElementById("passwordModal");
+    if (modal) {
+      modal.style.display = "none";
+    }
+    this.modalCallback = null;
+  }
+
+  // Submit the password and execute the callback if valid
+  submitPassword() {
+    const correctPassword = 'shehabcenter@123';
+
+    if (this.enteredPassword === correctPassword && this.modalCallback) {
+      this.modalCallback();
+      this.closeModal();
+    } else {
+      this.toastrService.error("Wrong password.");
+    }
+  }
+
+  // onSalesOrderReturnSubmit method
   onSalesOrderReturnSubmit() {
-    debugger
     if (!this.salesOrderForm.valid) {
       this.salesOrderForm.markAllAsTouched();
       return;
-    }
-
-    else {
+    } else {
       if (this.salesOrder && this.salesOrder.salesOrderStatus === SalesOrderStatusEnum.Return) {
-        this.toastrService.error("Sales Order can't edit becuase it's already approved.");
+        this.toastrService.error("Sales Order can't be edited because it's already approved.");
         return;
       }
-      const salesOrder = this.buildSalesOrder();
-      if (salesOrder.id) {
-        this.salesOrderService.updateSalesOrderReturn(salesOrder)
-          .subscribe((c: SalesOrder) => {
-            this.toastrService.success('Sales order return added.');
-            this.router.navigate(['/pos']);
-            this.ngOnInit();
-          })
-      }
+
+      this.showModal(() => {
+        console.log("Executing Sales Order Return after password validation...");
+        const salesOrder = this.buildSalesOrder();
+        if (salesOrder.id) {
+          this.salesOrderService.updateSalesOrderReturn(salesOrder)
+            .subscribe((c: SalesOrder) => {
+              this.toastrService.success('Sales order return added.');
+              this.router.navigate(['/pos']);
+              this.ngOnInit();
+            });
+        }
+      });
+    }
+  }
+
+  // endShift method
+  endShift(): void {
+    this.showModal(() => {
+      console.log("Executing endShift after password validation...");
+      this.salesOrderService.endShift().subscribe(
+        response => {
+          this.toastrService.success('Shift ended successfully');
+
+          // Call the service to get the sales summary data
+          this.salesOrderService.getSalesSummaryAsync().subscribe(
+            summaryData => {
+              console.log('Sales Summary:', summaryData);
+
+              // Set the sales summary data to display in the modal
+              this.salesSummary = summaryData;
+
+              // Open the sales summary modal
+              this.openSalesSummaryModal();
+            },
+            error => {
+              this.toastrService.error("Failed to load sales summary data");
+              console.error('Error fetching sales summary:', error);
+            }
+          );
+        },
+        (error: Error) => {
+          this.toastrService.error("No ongoing shift found for the user");
+          console.error('Error ending shift:', error);
+        }
+      );
+    });
+  }
+  calculateDeficit(): void {
+    this.deficit = this.drawerBalance - this.salesSummary.netTotal;
+  }
+  openSalesSummaryModal(): void {
+    const modal = document.getElementById('salesSummaryModal');
+    if (modal) {
+      modal.style.display = 'block';
+    }
+  }
+
+  closeSalesSummaryModal(): void {
+    const modal = document.getElementById('salesSummaryModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  }
+
+  printSalesSummary(): void {
+    const printWindow = window.open('', '', 'width=800,height=600');
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.write(`
+        <html>
+        <head>
+          <title>ملخص المبيعات</title>
+          <style>
+            body { font-family: Arial, sans-serif; direction: rtl; }
+            .sales-summary-print { margin: 20px; text-align: right; }
+            .sales-summary-print h2 { margin-top: 0; }
+            .sales-summary-print p { margin: 10px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="sales-summary-print">
+            <h2>ملخص المبيعات</h2>
+            <p><strong>إجمالي المبيعات النقدية:</strong> ${this.salesSummary.cashSalesTotal}</p>
+            <p><strong>المستخدم:</strong> ${this.salesSummary.user}</p>
+            <p><strong>إجمالي الإرجاع:</strong> ${this.salesSummary.returnTotal}</p>
+            <p><strong>إجمالي مبيعات الفيزا:</strong> ${this.salesSummary.visaSalesTotal}</p>
+            <p><strong>صافي النقد:</strong> ${this.salesSummary.netCash}</p>
+            <p><strong>إجمالي الخصم:</strong> ${this.salesSummary.totalDiscount}</p>
+            <p><strong>الصافي الإجمالي:</strong> ${this.salesSummary.netTotal}</p>
+            <p><strong>رصيد الصندوق:</strong> ${this.drawerBalance}</p>
+            <p><strong>العجز:</strong> ${this.deficit}</p>
+          </div>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
     }
   }
 
@@ -749,17 +937,7 @@ export class PosComponent
     );
   }
 
-  endShift(): void {
-    this.salesOrderService.endShift().subscribe(
-      response => {
-        this.toastrService.success('Shift ended successfully');
-      },
-      (error: Error) => {
-        this.toastrService.error("No ongoing shift found for the user");
-        console.error('Error ending shift:', error);
-      }
-    );
-  }
+
 
   generateInvoice(so: SalesOrder) {
     const soForInvoice = this.clonerService.deepClone<SalesOrder>(so);
@@ -770,12 +948,13 @@ export class PosComponent
       console.log(response.salesOrderItems)
       if (response && Array.isArray(response.salesOrderItems)) {
         soForInvoice.salesOrderItems = response.salesOrderItems;
+        debugger
         this.salesOrderForInvoice = soForInvoice;
         console.log(this.salesOrderForInvoice?.orderNumber)
       } else {
         throw new Error('Sales order items not found or invalid format.');
       }
-      this.printInvoice();
+      this.printInvoice(so);
       console.log("GenerateInvoice", this.salesOrderForInvoice);
 
     }),
@@ -787,7 +966,7 @@ export class PosComponent
 
   }
 
-  printInvoice() {
+  printInvoice(so) {
     this.changeDetector.detectChanges();
 
     // Create a new window for printing
@@ -809,7 +988,7 @@ export class PosComponent
                         text-align: center; /* Center text in the body */
                     }
                     #printSection {
-                        width: 58mm; /* Common width for POS receipts */
+                        width: 75mm; /* Common width for POS receipts */
                         padding: 10px;
                         border: 1px solid #000;
                         border-radius: 5px;
@@ -817,17 +996,17 @@ export class PosComponent
                         color: #000;
                         box-sizing: border-box;
                         display: inline-block; /* Center the div horizontally */
-                        text-align: left; /* Align text to the left within the div */
+                        text-align: right; /* Align text to the left within the div */
                     }
                     #printSection table {
-                        width: 70%;
+                        width: 100%;
                         border-collapse: collapse;
                         margin: 10px 0;
                     }
                     #printSection th, #printSection td {
                         border: 1px solid #000;
                         padding: 5px;
-                        text-align: left;
+                        text-align: right;
                     }
                     #printSection th {
                         background-color: #f2f2f2;
@@ -840,63 +1019,63 @@ export class PosComponent
         </head>
         <body onload="window.print();window.close()">
             <div id="printSection">
-                <h1>SHEHAB CENTER</h1>
-                <p id="order_number">Invoice No: ${this.salesOrderForInvoice?.orderNumber}</p>
-                <p>Date: ${new Date(this.salesOrderForInvoice?.soCreatedDate).toLocaleDateString()}</p>
+                <h1>شهــــــاب سنتـــــر</h1>
+                <p id="order_number">${this.salesOrderForInvoice?.orderNumber} :رقم الفاتورة</p>
+                <p>التاريخ: ${new Date(this.salesOrderForInvoice?.soCreatedDate).toLocaleString()}</p>
+                <p style="">${this.casher} :الكاشير</p>
                 <table>
                     <thead>
                         <tr>
-                            <th>Product</th>
-                            <th class="qty-col">Qty</th>
-                            <th>Price</th>
-                            <th>Tax</th>
+                            <th>الاجمالي</th>
+                            <th>السعر</th>
+                            <th class="qty-col">الكمية</th>
+                            <th>الصنف</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${this.salesOrderForInvoice?.salesOrderItems.map(item => `
                             <tr>
-                                <td>${item.productName}</td>
-                                <td class="qty-col">${item.quantity}</td>
+                                <td>${item.unitPrice * item.quantity}</td>
                                 <td>${item.unitPrice}</td>
-                                <td>${item.taxValue}</td>
+                                <td class="qty-col">${item.quantity}</td>
+                                <td>${item.productName}</td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
-                <p>Total Discount: ${this.salesOrderForInvoice?.totalDiscount}</p>
-                <p>Total Tax: ${this.salesOrderForInvoice?.totalTax}</p>
-                <p>Total Amount: ${this.salesOrderForInvoice?.totalAmount}</p>
+                <p>عدد الاصناف: ${this.salesOrderForInvoice?.salesOrderItems?.length}</p>
+                <p>طريقة الدفع: ${so?.isVisa ? "فيزا" : "كاش"}</p>
+                <p>اجمالي الخصم: ${this.salesOrderForInvoice?.totalDiscount}</p>
+                <p>الاجمالي: ${this.salesOrderForInvoice?.totalAmount}</p>
             </div>
         </body>
         </html>
     `);
-    printWindow.focus();
-    printWindow.print();
+    //printWindow.focus();
+    // printWindow.print();
     printWindow.document.close();
-
-    // Wait for the new window to be fully loaded before printing
-    // printWindow.onload = function() {
-
-    //     // Clean up the new window after printing
-    //     printWindow.onafterprint = function() {
-    //         printWindow.close();
-    //     };
-    // };
   }
 
   onRemoveAllSalesOrderItems(): void {
     this.salesOrderItemsArray.clear();
     // this.getAllTotal();
-}
+  }
 
   private calculateBalance(): void {
     this.amountPaid = this.salesOrderForm.get('amountPaid').value || 0;
     this.balance = this.amountPaid - this.grandTotal;
   }
+  onBarcodeEnter() {
+    this.setFocusOnBarcodeInput();
+  }
+
+  private setFocusOnBarcodeInput() {
+    this.barcodeInput.nativeElement.focus();
+  }
 
   @HostListener('window:keydown', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent) {
-    if (event.key === 'F1') {
+    if (event.key === 'F2') {
       event.preventDefault();
       this.onSaveAndNew();
     }
@@ -908,9 +1087,77 @@ export class PosComponent
       event.preventDefault();
       this.onSalesOrderReturnSubmit();
     }
+    else if (event.key === 'F9') {
+      event.preventDefault();
+      this.onSalesOrderReturnSubmit();
+    }
     else if (event.key === 'Escape') {
       event.preventDefault();
       this.router.navigate(['/']);
+    } else if (event.key === 'F10') {
+      event.preventDefault();
+      this.toggleVisaCheckbox();
     }
   }
+
+  //Import Products From Excel
+  onFileChange(event: any) {
+    const target: DataTransfer = <DataTransfer>(event.target);
+    if (target.files.length !== 1) throw new Error('Cannot use multiple files');
+
+    const reader: FileReader = new FileReader();
+
+    reader.onload = (e: any) => {
+      const binaryStr: string = e.target.result;
+      const workbook: XLSX.WorkBook = XLSX.read(binaryStr, { type: 'binary' });
+
+      const sheetName: string = workbook.SheetNames[0];
+      const worksheet: XLSX.WorkSheet = workbook.Sheets[sheetName];
+
+      const data: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      this.importProducts(data);
+    };
+
+    reader.readAsBinaryString(target.files[0]);
+  }
+
+  importProducts(data: any[]) {
+    data.slice(1).forEach(row => {  // Assuming first row is header
+      const product: Product = {
+        name: row[0],
+        code: row[1],
+        barcode: row[2],
+        skuCode: row[3],
+        skuName: row[4],
+        description: row[5],
+        productUrl: row[6],
+        qrCodeUrl: row[7],
+        unitId: row[8],
+        purchasePrice: row[9],
+        salesPrice: row[10],
+        mrp: row[11],
+        categoryId: row[12],
+        productUrlData: '',               // Set appropriate default or value
+        isProductImageUpload: false,      // Set appropriate default or value
+        qRCodeUrlData: '',                // Set appropriate default or value
+        isQrCodeUpload: false,            // Set appropriate default or value
+        productTaxes: [],                 // Initialize as an empty array or set value if available
+        warehouseId: row[14],             // Optional based on your type definition
+        unit: undefined,                  // Optional, set to undefined if not provided
+        categoryName: undefined,          // Optional, set to undefined if not provided
+        unitName: undefined               // Optional, set to undefined if not provided
+      };
+
+      this.productService.addProudct(product).subscribe(
+        (response) => {
+          console.log('Product added successfully', response);
+        },
+        (error) => {
+          console.error('Error adding product', error);
+        }
+      );
+    });
+  }
+
 }

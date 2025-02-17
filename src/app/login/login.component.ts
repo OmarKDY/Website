@@ -55,11 +55,11 @@ export class LoginComponent extends BaseComponent implements OnInit {
     });
   }
 
-  onLoginSubmit() {
+  async onLoginSubmit() {
     if (this.loginFormGroup.valid) {
       this.isLoading = true;
       const userObject = Object.assign(this.loginFormGroup.value, { latitude: this.lat, longitude: this.lng });
-      this.sub$.sink = this.securityService.login(userObject)
+      this.sub$.sink = (await this.securityService.login(userObject))
         .subscribe(
           (c: UserAuth) => {
             const userInfo: OnlineUser = {

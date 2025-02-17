@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
-import { Observable, BehaviorSubject } from 'rxjs';
+import { Observable, BehaviorSubject, of } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
-import { tap, catchError, map } from 'rxjs/operators';
+import { tap, catchError, map, switchMap, concatMap } from 'rxjs/operators';
 import { UserAuth } from '../domain-classes/user-auth';
 import { CommonHttpErrorService } from '../error-handler/common-http-error.service';
 import { CommonError } from '../error-handler/common-error';
@@ -10,16 +10,23 @@ import { Router } from '@angular/router';
 import { ClonerService } from '@core/services/clone.service';
 import { CompanyProfile } from '@core/domain-classes/company-profile';
 import { environment } from '@environments/environment';
+import { SignalrService } from '@core/services/signalr.service';
+import { CommonDialogService } from '@core/common-dialog/common-dialog.service';
+import { OnlineUser } from '@core/domain-classes/online-user';
+import { TranslationService } from '@core/services/translation.service';
 
 
 @Injectable(
   { providedIn: 'root' }
 )
 export class SecurityService {
+  onlineUsers: OnlineUser[] = [];
   // securityObject: UserAuth = new UserAuth();
   private _securityObject$: BehaviorSubject<UserAuth> = new BehaviorSubject<UserAuth>(null);
   private _companyProfile$: BehaviorSubject<CompanyProfile> = new BehaviorSubject<CompanyProfile>(null);
   public currencyCode = 'USD';
+  sub$: any;
+  private _onlineUsers: any;
 
   public get companyProfile(): Observable<CompanyProfile> {
     return this._companyProfile$;
@@ -44,23 +51,105 @@ export class SecurityService {
     private http: HttpClient,
     private commonHttpErrorService: CommonHttpErrorService,
     private router: Router,
-    private clonerService: ClonerService
+    private clonerService: ClonerService,
+    private signalrService: SignalrService,
+    private commonDialogService: CommonDialogService,
+    public translationService: TranslationService
   ) {
 
   }
 
-  login(entity: User): Observable<UserAuth | CommonError> {
-    // Initialize security object
-    this.resetSecurityObject();
-    return this.http.post<UserAuth>('authentication', entity)
-      .pipe(
-        tap((resp) => {
-          localStorage.setItem('authObj', JSON.stringify(resp));
-          localStorage.setItem('bearerToken', resp.bearerToken);
-          this._securityObject$.next(resp);
-        })
-      ).pipe(catchError(this.commonHttpErrorService.handleError));
+  getOnlineUsers(): Observable<OnlineUser[]> {
+    return this.signalrService.onlineUsers$.pipe(
+      map((onlineUsers: OnlineUser[] | null) => {
+        console.log("Online users before mapping:", onlineUsers);
+        if (!onlineUsers) {
+          console.warn("Online users is null or undefined");
+          return []; // Return an empty array if no users are available
+        }
+        return onlineUsers.map((onlineUser: OnlineUser) => ({
+          id: onlineUser.id,
+          email: onlineUser.email,
+          connectionId: onlineUser.connectionId,
+        }));
+      }),
+      tap(users => console.log("Mapped OnlineUsers to Users", users)),
+      catchError((error) => {
+        console.error("Error in getOnlineUsers:", error);
+        return of([]); // Return an empty array on error
+      })
+    );
   }
+  
+  
+  
+  
+  onForceLogout(id: string) {
+          this.signalrService.forceLogout(id);
+  }
+
+  login(entity: User): Observable<UserAuth | CommonError> {
+    return this.getOnlineUsers().pipe(
+      switchMap((onlineUsers: OnlineUser[]) => {
+        if (!onlineUsers || onlineUsers.length === 0) {
+          console.warn("No online users found.");
+          // Proceed with the login request even if no users are found
+        }
+  
+        // Ensure that the online users list is fully populated
+        return this.waitForOnlineUsers().pipe(
+          switchMap(() => {
+            // Proceed with the login request
+            const existingUser = onlineUsers.find(user => user.email === entity.userName);
+            if (existingUser) {
+              console.log("Existing user found:", existingUser);
+              this.onForceLogout(existingUser.id); // Pass the ID of the existing user to force logout
+            }
+  
+            return this.http.post<UserAuth>('authentication', entity).pipe(
+              tap((resp) => {
+                console.log("Login response:", resp);
+                localStorage.setItem('authObj', JSON.stringify(resp));
+                localStorage.setItem('bearerToken', resp.bearerToken);
+                this._securityObject$.next(resp);
+              }),
+              catchError((error) => {
+                console.error("Login error:", error);
+                return this.commonHttpErrorService.handleError(error);
+              })
+            );
+          }),
+          catchError((error) => {
+            console.error("Error in waiting for online users:", error);
+            return of<UserAuth | CommonError>(null); // Handle error
+          })
+        );
+      }),
+      catchError((error) => {
+        console.error("Error in login method:", error);
+        return of<UserAuth | CommonError>(null); // Handle login error
+      })
+    );
+  }
+  
+  // Helper method to ensure online users are updated
+  private waitForOnlineUsers(): Observable<void> {
+    return this.getOnlineUsers().pipe(
+      tap((onlineUsers: OnlineUser[]) => {
+        if (onlineUsers && onlineUsers.length > 0) {
+          console.log("Online users list is updated:", onlineUsers);
+        } else {
+          console.warn("Waiting for online users list to be updated...");
+        }
+      }),
+      map(() => undefined), // Map to void once online users are confirmed
+      catchError((error) => {
+        console.error("Error waiting for online users:", error);
+        return of(undefined); // Return void on error
+      })
+    );
+  }
+  
 
   isLogin(): boolean {
     const authStr = localStorage.getItem('authObj');

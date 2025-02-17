@@ -25,5 +25,7 @@ export interface SalesOrder {
     paymentStatus?: PaymentStatus
     salesOrderItems: SalesOrderItem[];
     status?: number;
-    isTouched?:boolean
+    isTouched?:boolean;
+    IsVisa?:boolean;
+    ShiftId?: number;
 }
