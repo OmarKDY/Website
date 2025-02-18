@@ -1,0 +1,88 @@
+<div class="stock-taking-container">
+  <h2>Stock Taking</h2>
+
+  <!-- Warehouse and Search Section -->
+  <div class="search-section">
+    <div [formGroup]="stockTakingForm" class="form-group">
+      <!-- Warehouse Dropdown -->
+      <mat-form-field>
+        <mat-label>Warehouse</mat-label>
+        <mat-select formControlName="warehouse">
+          <mat-option *ngFor="let warehouse of warehouses" [value]="warehouse.id">
+            {{ warehouse.name }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>            
+
+      <!-- Search Input -->
+      <mat-form-field appearance="fill" class="search-input">
+        <mat-label>Scan or enter product name</mat-label>
+        <input 
+          matInput 
+          type="text" 
+          formControlName="searchInput"
+          (blur)="searchProduct()"
+          #searchInput
+        />
+      </mat-form-field>
+    </div>
+  </div>
+
+  <!-- Table Section -->
+  <div style="width: 100%;" class="table-section">
+    <table  mat-table [dataSource]="dataSource" class="mat-elevation-z8 full-width-table">
+      <!-- Product Name Column -->
+      <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef>Product Name</th>
+        <td mat-cell *matCellDef="let item">{{ item.name }}</td>
+      </ng-container>
+    
+      <!-- Barcode Column -->
+      <ng-container matColumnDef="barcode">
+        <th mat-header-cell *matHeaderCellDef>Barcode</th>
+        <td mat-cell *matCellDef="let item">{{ item.barcode }}</td>
+      </ng-container>
+    
+      <!-- Current Stock Column -->
+      <ng-container matColumnDef="currentStock">
+        <th mat-header-cell *matHeaderCellDef>Current Stock</th>
+        <td mat-cell *matCellDef="let item">{{ item.currentStock }}</td>
+      </ng-container>
+    
+      <!-- Actual Count Column -->
+      <ng-container matColumnDef="actualStock">
+        <th mat-header-cell *matHeaderCellDef>Actual Count</th>
+        <td mat-cell *matCellDef="let item">
+          <input 
+            type="number" 
+            [(ngModel)]="item.actualStock" 
+            (change)="calculateDifference()"
+            min="0"
+            class="stock-input"
+          />
+        </td>
+      </ng-container>
+    
+      <!-- Difference Column -->
+      <ng-container matColumnDef="difference">
+        <th mat-header-cell *matHeaderCellDef>Difference</th>
+        <td mat-cell *matCellDef="let item">
+          <span [ngClass]="{'positive': item.difference > 0, 'negative': item.difference < 0}">
+            {{ item.difference }}
+          </span>
+        </td>
+      </ng-container>
+    
+      <!-- Header and Row Definitions -->
+      <tr mat-header-row *matHeaderRowDef="['name', 'barcode', 'currentStock', 'actualStock', 'difference']"></tr>
+      <tr mat-row *matRowDef="let row; columns: ['name', 'barcode', 'currentStock', 'actualStock', 'difference'];"></tr>
+    </table>
+    
+  </div>
+
+  <!-- Buttons Section -->
+  <div class="button-section">
+    <button mat-raised-button color="primary" (click)="submitStockTaking()">Submit</button>
+    <button mat-raised-button color="warn" (click)="rollbackStockTaking()">Rollback</button>
+  </div>
+</div>

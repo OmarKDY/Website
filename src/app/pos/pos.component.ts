@@ -803,7 +803,7 @@ onSalesOrderSubmit(isSaveAndNew = false) {
 
   // Submit the password and execute the callback if valid
   submitPassword() {
-    const correctPassword = 'shehabcenter@123';
+    const correctPassword = 'alamira@123';
 
     if (this.enteredPassword === correctPassword && this.modalCallback) {
       this.modalCallback();
@@ -1019,10 +1019,9 @@ onSalesOrderSubmit(isSaveAndNew = false) {
         </head>
         <body onload="window.print();window.close()">
             <div id="printSection">
-                <h1>شهــــــاب سنتـــــر</h1>
+                <h1> مــحـلات الأميـــرة</h1>
                 <p id="order_number">${this.salesOrderForInvoice?.orderNumber} :رقم الفاتورة</p>
                 <p>التاريخ: ${new Date(this.salesOrderForInvoice?.soCreatedDate).toLocaleString()}</p>
-                <p style="">${this.casher} :الكاشير</p>
                 <table>
                     <thead>
                         <tr>

@@ -16,6 +16,7 @@ import { OwlDateTimeModule, OwlNativeDateTimeModule } from 'ng-pick-datetime-ex'
 import { TranslationService } from '@core/services/translation.service';
 import { delayBootstrapping } from './boostrap-loader';
 import { DOCUMENT } from '@angular/common';
+import { StockTakingComponent } from './stocktaking/stocktaking.component';
 
 
 @NgModule({

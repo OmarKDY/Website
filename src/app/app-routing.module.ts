@@ -241,6 +241,13 @@ const routes: Routes = [
             import('./inventory/inventory.module').then(
               m => m.InventoryModule
             )
+        }, 
+        {
+          path: 'stocktaking',
+          loadChildren: () =>
+            import('./stocktaking/stocktaking.module').then(
+              m => m.StockTakingModule
+            )
         },
         {
           path: 'purchase-order-report',

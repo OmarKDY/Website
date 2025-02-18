@@ -185,6 +185,13 @@
                 <p>{{'INVENTORY' | translate}}</p>
               </a>
             </li>
+            <li *hasClaim="['INVE_VIEW_INVENTORIES']" class="nav-item">
+              <a [routerLink]="['/stocktaking']" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}"
+                class="nav-link">
+                <i class="far fa-list-alt nav-icon"></i>
+                <p>{{'Stock_Taking' | translate}}</p>
+              </a>
+            </li>
             <li id="ProductHeading" aria-expanded="true" aria-controls="collapseOne" data-toggle="collapse"
             data-target="#ProductCategory" class="collapsed"
             *hasClaim="['PRO_VIEW_PRODUCTS','PRO_ADD_PRODUCT','PRO_MANAGE_PRO_CAT','PRO_MANAGE_TAX','PRO_MANAGE_UNIT','PRO_MANAGE_BRAND','PRO_MANAGE_WAREHOUSE']">

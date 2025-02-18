@@ -6,10 +6,25 @@ import { InventoryHistoryResourceParameter } from '@core/domain-classes/inventor
 import { InventoryResourceParameter } from '@core/domain-classes/inventory-resource-parameter';
 import { Observable } from 'rxjs';
 
+interface ProductSearchResponse {
+  id: string;      // lowercase to match backend
+  name: string;    // lowercase
+  barcode: string; // lowercase
+  stock: number;   // lowercase
+}
+
+interface StockTakingItem{
+  productId: string;      // lowercase to match backend
+  actualStock: number;   // lowercase
+  difference: number;    // lowercase
+  warehouseId: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class InventoryService {
+  private apiUrl = 'https://localhost:44380/api';
 
   constructor(private http: HttpClient) { }
 
@@ -74,4 +89,36 @@ export class InventoryService {
     });
   }
 
+// Stock Taking Logic
+
+getStockItems(): Observable<any[]> {
+  return this.http.get<any[]>(`stocktaking/inventories`);
+}
+
+updateStockItems(items: StockTakingItem[]): Observable<any> {
+  const payload = items.map(item => ({
+    ProductId: item.productId,
+    ActualStock: item.actualStock,
+    WarehouseId: item.warehouseId, // Add warehouse ID
+    Notes: `Stock adjustment - ${item.difference} units`
+  }));
+
+  return this.http.put(`stocktaking`, payload);
+}
+
+rollbackStockTaking(): Observable<any> {
+  return this.http.post(`stocktaking/rollback`, {});
+}
+
+searchProductByBarcodeOrName(query: string, warehouseId: string): Observable<ProductSearchResponse[]> {
+  return this.http.get<ProductSearchResponse[]>(`stocktaking/search`, { 
+    params: { 
+      query, 
+      warehouseId
+    } 
+  });
+}
+getWarehouses(): Observable<{ id: string, name: string }[]> {
+  return this.http.get<{ id: string, name: string }[]>(`warehouses`);
+}
 }

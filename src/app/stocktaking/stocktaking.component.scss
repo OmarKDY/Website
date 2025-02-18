@@ -1,0 +1,57 @@
+:host {
+  .stock-taking-container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .warehouse-dropdown,
+  .search-input {
+    flex: 1;
+  }
+
+  .table-section {
+    margin-bottom: 20px;
+    width: 100%;
+  }
+/* Ensure the table takes up 100% width */
+.full-width-table {
+  width: 100%;
+}
+
+/* Ensure the table cells take up equal width */
+.full-width-table th,
+.full-width-table td {
+  width: 30%; /* Adjust based on the number of columns */
+}
+
+/* Optional: Ensure the table section takes up 100% width */
+.table-section {
+  width: 100%;
+}
+
+/* Optional: Ensure the container takes up 100% width */
+.stock-taking-container {
+  width: 100%;
+}
+  .stock-input {
+    width: 80px;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  .button-section {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  .positive {
+    color: green;
+  }
+
+  .negative {
+    color: red;
+  }
+}
