@@ -2,6 +2,7 @@
   "ADMIN_TITLE":"Administration",
   "GL_TITLE":"General Ledger",
   "Stock_Taking":"Stock-Taking",
+  "Stock_Transfer":"Stock-Transfer",
   "INV_TITLE":"Inventory",
   "SALES_TITLE":"Sales",
   "PURCHASE_TITLE":"Purchase",

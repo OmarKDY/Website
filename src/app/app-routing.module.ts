@@ -250,6 +250,13 @@ const routes: Routes = [
             )
         },
         {
+          path: 'stocktransfer',
+          loadChildren: () =>
+            import('./stock-transfer/stock-transfer.module').then(
+              m => m.StockTransferModule
+            )
+        },
+        {
           path: 'purchase-order-report',
           loadChildren: () =>
             import('./reports/purchase-order-report/purchase-order-report.module').then(

@@ -121,4 +121,8 @@ searchProductByBarcodeOrName(query: string, warehouseId: string): Observable<Pro
 getWarehouses(): Observable<{ id: string, name: string }[]> {
   return this.http.get<{ id: string, name: string }[]>(`warehouses`);
 }
+
+transferStock(transferItems: any[]): Observable<any> {
+  return this.http.post(`stocktaking/transfer`, transferItems);
+}
 }
