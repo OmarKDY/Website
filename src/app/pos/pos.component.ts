@@ -140,11 +140,11 @@ export class PosComponent
     this.casher = JSON.parse(localStorage.getItem("authObj")).firstName;
     this.isVisa = false;
     this.amountPaid = 0
-      // Ensure ShiftId is a number
-  const shiftId = localStorage.getItem('shiftId');
-  if (shiftId) {
-    this.currentShift = { ShiftId: Number(shiftId) };
-  }
+    // Ensure ShiftId is a number
+    const shiftId = localStorage.getItem('shiftId');
+    if (shiftId) {
+      this.currentShift = { ShiftId: Number(shiftId) };
+    }
   }
 
   ngAfterViewInit(): void {
@@ -177,7 +177,7 @@ export class PosComponent
           IsVisa: [this.isVisa],
           ShiftId: this.currentShift ? Number(this.currentShift.ShiftId) : null,
         });
-        console.log("the current shift",this.currentShift)
+        console.log("the current shift", this.currentShift)
       });
   }
 
@@ -468,86 +468,86 @@ export class PosComponent
     this.onSalesOrderSubmit(true);
   }
 
-// Method to start a shift and submit a sales order
-onSalesOrderSubmit(isSaveAndNew = false) {
-  if (!this.salesOrderForm.valid) {
-    this.salesOrderForm.markAllAsTouched(); // Mark fields as touched to show validation errors
-    return;
-  }
-
-  const salesOrder = this.buildSalesOrder();
-  let salesOrderItems = this.salesOrderForm.get('salesOrderItems').value;
-
-  if (salesOrderItems && salesOrderItems.length == 0) {
-    this.toastrService.error(
-      this.translationService.getValue('PLEASE_SELECT_ATLEAST_ONE_PRODUCT')
-    );
-    return;
-  }
-
-  if (isSaveAndNew) {
-    this.getNewSalesOrderNumber();
-    salesOrder.orderNumber = this.currentOrderNumber;
-  }
-
-  // Get the ShiftId from localStorage if it exists
-  let shiftId = localStorage.getItem('shiftId');
-
-  this.salesOrderService.checkOngoingShift().pipe(
-    switchMap((hasOngoingShift: boolean) => {
-      console.log("Has ongoing shift: ", hasOngoingShift);
-  
-      if (!hasOngoingShift) {
-        // No ongoing shift, start a new shift
-        return this.salesOrderService.startShift().pipe(
-          tap((newShift: any) => {
-            console.log("New shift started with ID: ", newShift.shiftId);
-            localStorage.setItem('shiftId', newShift.shiftId);
-            salesOrder.ShiftId = newShift.shiftId; // Assign new shift ID
-            this.currentShift = newShift;
-          })
-        );
-      } else {
-        // Ongoing shift exists, fetch the latest shift
-        return this.salesOrderService.GetLatestShift().pipe(
-          tap((latestShift: any) => {
-            console.log("Using existing shift with ID: ", latestShift.shiftId);
-            localStorage.setItem('shiftId', latestShift.shiftId);
-            salesOrder.ShiftId = latestShift.shiftId; // Use existing shift ID
-            this.currentShift = latestShift;
-          })
-        );
-      }
-    }),
-    switchMap(() => {
-      // Now add the sales order with the associated shiftId
-      console.log("Assigned ShiftId to SalesOrder:", salesOrder.ShiftId);
-      return this.salesOrderService.addSalesOrder(salesOrder);
-    })
-  ).subscribe(
-    (response: SalesOrder) => {
-      this.toastrService.success(
-        this.translationService.getValue('SALES_ORDER_ADDED_SUCCESSFULLY')
-      );
-  
-      const newSalesOrderId = response.id;
-      this.generateInvoice(response);
-  
-      if (isSaveAndNew) {
-        this.router.navigate(['/pos']);
-        this.ngOnInit(); // Reinitialize the component for a new sales order
-      } else {
-        this.router.navigate(['/sales-order/list']);
-      }
-    },
-    (error) => {
-      this.toastrService.error(
-        this.translationService.getValue('FAILED_TO_ADD_SALES_ORDER')
-      );
-      console.error('Error adding sales order:', error);
+  // Method to start a shift and submit a sales order
+  onSalesOrderSubmit(isSaveAndNew = false) {
+    if (!this.salesOrderForm.valid) {
+      this.salesOrderForm.markAllAsTouched(); // Mark fields as touched to show validation errors
+      return;
     }
-  );
-}
+
+    const salesOrder = this.buildSalesOrder();
+    let salesOrderItems = this.salesOrderForm.get('salesOrderItems').value;
+
+    if (salesOrderItems && salesOrderItems.length == 0) {
+      this.toastrService.error(
+        this.translationService.getValue('PLEASE_SELECT_ATLEAST_ONE_PRODUCT')
+      );
+      return;
+    }
+
+    if (isSaveAndNew) {
+      this.getNewSalesOrderNumber();
+      salesOrder.orderNumber = this.currentOrderNumber;
+    }
+
+    // Get the ShiftId from localStorage if it exists
+    let shiftId = localStorage.getItem('shiftId');
+
+    this.salesOrderService.checkOngoingShift().pipe(
+      switchMap((hasOngoingShift: boolean) => {
+        console.log("Has ongoing shift: ", hasOngoingShift);
+
+        if (!hasOngoingShift) {
+          // No ongoing shift, start a new shift
+          return this.salesOrderService.startShift().pipe(
+            tap((newShift: any) => {
+              console.log("New shift started with ID: ", newShift.shiftId);
+              localStorage.setItem('shiftId', newShift.shiftId);
+              salesOrder.ShiftId = newShift.shiftId; // Assign new shift ID
+              this.currentShift = newShift;
+            })
+          );
+        } else {
+          // Ongoing shift exists, fetch the latest shift
+          return this.salesOrderService.GetLatestShift().pipe(
+            tap((latestShift: any) => {
+              console.log("Using existing shift with ID: ", latestShift.shiftId);
+              localStorage.setItem('shiftId', latestShift.shiftId);
+              salesOrder.ShiftId = latestShift.shiftId; // Use existing shift ID
+              this.currentShift = latestShift;
+            })
+          );
+        }
+      }),
+      switchMap(() => {
+        // Now add the sales order with the associated shiftId
+        console.log("Assigned ShiftId to SalesOrder:", salesOrder.ShiftId);
+        return this.salesOrderService.addSalesOrder(salesOrder);
+      })
+    ).subscribe(
+      (response: SalesOrder) => {
+        this.toastrService.success(
+          this.translationService.getValue('SALES_ORDER_ADDED_SUCCESSFULLY')
+        );
+
+        const newSalesOrderId = response.id;
+        this.generateInvoice(response);
+
+        if (isSaveAndNew) {
+          this.router.navigate(['/pos']);
+          this.ngOnInit(); // Reinitialize the component for a new sales order
+        } else {
+          this.router.navigate(['/sales-order/list']);
+        }
+      },
+      (error) => {
+        this.toastrService.error(
+          this.translationService.getValue('FAILED_TO_ADD_SALES_ORDER')
+        );
+        console.error('Error adding sales order:', error);
+      }
+    );
+  }
 
 
   reloadCurrentRoute() {
@@ -966,94 +966,179 @@ onSalesOrderSubmit(isSaveAndNew = false) {
 
   }
 
+
   printInvoice(so) {
     this.changeDetector.detectChanges();
 
     // Create a new window for printing
     const printWindow = window.open('', '', 'width=800,height=600');
+    if (!printWindow) {
+      console.error('Failed to open print window');
+      return;
+    }
+
+    // Your base64 image strings should be passed in or stored somewhere accessible
+    const logoBase64 = "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";
+    const qrLogoBase64 = "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";
 
     // Set the content of the new window
     printWindow.document.open();
     printWindow.document.write(`
-        <html>
-        <head>
-            <title>Invoice</title>
-            <style>
-                @media print {
-                    body {
-                        margin: 0;
-                        padding: 0;
-                        box-shadow: none;
-                        font-family: Arial, sans-serif;
-                        text-align: center; /* Center text in the body */
-                    }
-                    #printSection {
-                        width: 75mm; /* Common width for POS receipts */
-                        padding: 10px;
-                        border: 1px solid #000;
-                        border-radius: 5px;
-                        box-shadow: 0 0 0 1px #000 inset;
-                        color: #000;
-                        box-sizing: border-box;
-                        display: inline-block; /* Center the div horizontally */
-                        text-align: right; /* Align text to the left within the div */
-                    }
-                    #printSection table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin: 10px 0;
-                    }
-                    #printSection th, #printSection td {
-                        border: 1px solid #000;
-                        padding: 5px;
-                        text-align: right;
-                    }
-                    #printSection th {
-                        background-color: #f2f2f2;
-                    }
-                    .qty-col {
-                        width: 10%; /* Adjust width for qty column */
-                    }
-                }
-            </style>
-        </head>
-        <body onload="window.print();window.close()">
-            <div id="printSection">
-                <h1> مــحـلات الأميـــرة</h1>
-                <p id="order_number">${this.salesOrderForInvoice?.orderNumber} :رقم الفاتورة</p>
-                <p>التاريخ: ${new Date(this.salesOrderForInvoice?.soCreatedDate).toLocaleString()}</p>
-                <table>
-                    <thead>
+<html>
+<head>
+    <title>Invoice</title>
+    <style>
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+                font-family: Arial, sans-serif;
+                text-align: center;
+            }
+            #printSection {
+                width: 75mm;
+                padding: 10px;
+                border: 1px solid #000;
+                border-radius: 5px;
+                box-shadow: 0 0 0 1px #000 inset;
+                color: #000;
+                box-sizing: border-box;
+                display: inline-block;
+                text-align: center;
+            }
+            img {
+                display: block !important;
+                max-width: 35mm !important;
+                max-height: 35mm !important;
+                visibility: visible !important;
+            }
+            #printSection img {
+                width: 50mm;
+                height: auto;
+                display: block;
+                margin: 0 auto;
+            }
+            #printSection table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 10px 0;
+                display: table !important;
+            }
+            #printSection th, #printSection td {
+                border: 1px solid #000 !important;
+                padding: 5px;
+                text-align: right !important;
+                display: table-cell !important;
+            }
+            #printSection th {
+                background-color: #f2f2f2;
+            }
+            .qty-col {
+                width: 10%;
+            }
+            @page {
+                size: 80mm auto;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="printSection">
+        <img id="logo" class="img-responsive" style="display:block; height:25mm; width:25mm" alt="Company Logo">
+        <h1>مــحـلات الأميـــرة</h1>
+        <p id="order_number">${this.salesOrderForInvoice?.orderNumber || ''} :رقم الفاتورة</p>
+        <p>التاريخ: ${new Date(this.salesOrderForInvoice?.soCreatedDate).toLocaleString('ar-SA')}</p>
+        ${this.casher ? `<p>${this.casher} :الكاشير</p>` : ''}
+        <table>
+            <thead>
+                <tr>
+                    <th>الاجمالي</th>
+                    <th>السعر</th>
+                    <th class="qty-col">الكمية</th>
+                    <th>الصنف</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${this.salesOrderForInvoice?.salesOrderItems?.length ?
+        this.salesOrderForInvoice.salesOrderItems.map(item => `
                         <tr>
-                            <th>الاجمالي</th>
-                            <th>السعر</th>
-                            <th class="qty-col">الكمية</th>
-                            <th>الصنف</th>
+                            <td>${(item.unitPrice * item.quantity).toFixed(2)}</td>
+                            <td>${item.unitPrice.toFixed(2)}</td>
+                            <td class="qty-col">${item.quantity}</td>
+                            <td>${item.productName}</td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        ${this.salesOrderForInvoice?.salesOrderItems.map(item => `
-                            <tr>
-                                <td>${item.unitPrice * item.quantity}</td>
-                                <td>${item.unitPrice}</td>
-                                <td class="qty-col">${item.quantity}</td>
-                                <td>${item.productName}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-                <p>عدد الاصناف: ${this.salesOrderForInvoice?.salesOrderItems?.length}</p>
-                <p>طريقة الدفع: ${so?.isVisa ? "فيزا" : "كاش"}</p>
-                <p>اجمالي الخصم: ${this.salesOrderForInvoice?.totalDiscount}</p>
-                <p>الاجمالي: ${this.salesOrderForInvoice?.totalAmount}</p>
-            </div>
-        </body>
-        </html>
+                    `).join('')
+        : '<tr><td colspan="4">لا توجد عناصر</td></tr>'}
+            </tbody>
+        </table>
+
+        <p>عدد الاصناف: ${this.salesOrderForInvoice?.salesOrderItems?.length || 0}</p>
+        <p>طريقة الدفع: ${so?.isVisa ? "فيزا" : "كاش"}</p>
+        <p>اجمالي الخصم: ${(this.salesOrderForInvoice?.totalDiscount || 0).toFixed(2)}</p>
+        <p>الاجمالي: ${(this.salesOrderForInvoice?.totalAmount || 0).toFixed(2)}</p>
+        <hr>
+<div id="footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 10px;">
+    <img id="QRlogo" class="img-responsive" style="display: block; height: 25mm; width: 25mm;" alt="QR Logo">
+    <div style="text-align: right; flex-grow: 1;">
+        <p style="margin: 0; font-weight: bold;">📞 واتساب: +1234567890</p>
+        <p style="margin: 0;">🏠 العنوان: شارع الأمير، المدينة</p>
+    </div>
+</div>
+    </div>
+    <script>
+        (function() {
+            let imagesLoaded = 0;
+            const totalImages = 2;
+            
+            function checkAllImagesLoaded() {
+                imagesLoaded++;
+                if (imagesLoaded === totalImages) {
+                    // Allow some time for the images to render properly
+                    setTimeout(() => {
+                        window.print();
+                        // Only close after printing is complete
+                        window.addEventListener('afterprint', function() {
+                            window.close();
+                        });
+                    }, 500);
+                }
+            }
+
+            function loadImage(imgElement, base64String) {
+                if (!base64String) {
+                    console.error('Missing base64 string for ' + imgElement.id);
+                    checkAllImagesLoaded(); // Count as loaded even if failed
+                    return;
+                }
+                
+                try {
+                    imgElement.src = 'data:image/jpeg;base64,' + base64String;
+                    imgElement.onload = checkAllImagesLoaded;
+                    imgElement.onerror = () => {
+                        console.error('Failed to load image: ' + imgElement.id);
+                        checkAllImagesLoaded(); // Count as loaded even if failed
+                    };
+                } catch (error) {
+                    console.error('Error loading image:', error);
+                    checkAllImagesLoaded(); // Count as loaded even if failed
+                }
+            }
+
+            // Load both images
+            loadImage(document.getElementById('logo'), '${logoBase64}');
+            loadImage(document.getElementById('QRlogo'), '${qrLogoBase64}');
+        })();
+    </script>
+</body>
+</html>
     `);
-    //printWindow.focus();
+    // printWindow.focus();
     // printWindow.print();
     printWindow.document.close();
   }
+
 
   onRemoveAllSalesOrderItems(): void {
     this.salesOrderItemsArray.clear();
