@@ -92,6 +92,7 @@ export class ManageProductComponent extends BaseComponent implements OnInit {
       unitId: ['', [Validators.required]],
       purchasePrice: [],
       salesPrice: [],
+      discountLimit:0,
       mrp: [],
       categoryId: ['', [Validators.required]],
       warehouseId: [''],
