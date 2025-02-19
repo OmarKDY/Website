@@ -235,6 +235,11 @@ export class PosComponent
         .at(existingProductIndex)
         .get('quantity')
         .patchValue(iteamToUpdate.quantity + 1);
+
+        // this.salesOrderItemsArray
+        // .at(existingProductIndex)
+        // .get('discountLimit')
+        // .patchValue(iteamToUpdate.discountLimit = product.discountLimit);
     } else {
       newIndex = this.salesOrderItemsArray.length;
       this.salesOrderItemsArray.push(
@@ -256,8 +261,10 @@ export class PosComponent
       taxValue: [taxs],
       unitId: [product.unitId, [Validators.required]],
       discountPercentage: [0, [Validators.min(0)]],
+      discountLimit: [product.discountLimit, [Validators.min(0)]],
       productName: [product.name || product.name],
     });
+    // console.log("discountLimit using get():", formGroup.get('discountLimit')?.value);
 
     this.unitsMap[index] = this.unitConversationlist.filter(
       (c) => c.id == product.unitId || c.parentId == product.unitId
@@ -293,6 +300,7 @@ export class PosComponent
       .subscribe(
         (resp: HttpResponse<Product[]>) => {
           if (resp && resp.headers) {
+            console.log("API Response:", resp.body); // Log the response to verify discountLimit
             if (this.isFromScanner) {
               this.isFromScanner = false;
               if (resp.body.length == 1) {
@@ -476,8 +484,25 @@ export class PosComponent
     }
 
     const salesOrder = this.buildSalesOrder();
-    let salesOrderItems = this.salesOrderForm.get('salesOrderItems').value;
+    // let salesOrderItems = this.salesOrderForm.get('salesOrderItems').value;
+  let hasDiscountError = false;
+  let salesOrderItems = this.salesOrderForm.get('salesOrderItems').value;
 
+  // Check if any discount exceeds the limit
+  salesOrderItems.forEach((item, index) => {
+    if (item.discountPercentage > item.discountLimit) {
+      this.salesOrderItemsArray.controls[index].get('discountPercentage').setErrors({ exceededLimit: true });
+      hasDiscountError = true;
+    } else {
+      this.salesOrderItemsArray.controls[index].get('discountPercentage').setErrors(null);
+    }
+  });
+
+  if (hasDiscountError) {
+    this.toastrService.error(this.translationService.getValue('DISCOUNT_EXCEEDS_LIMIT'));
+    return;
+  }
+    
     if (salesOrderItems && salesOrderItems.length == 0) {
       this.toastrService.error(
         this.translationService.getValue('PLEASE_SELECT_ATLEAST_ONE_PRODUCT')
@@ -600,6 +625,7 @@ export class PosComponent
             )
           ),
           discountPercentage: so.discountPercentage,
+          discountLimit:so.discountLimit,
           productId: so.productId,
           unitId: so.unitId,
           quantity: so.quantity,
@@ -620,6 +646,7 @@ export class PosComponent
         });
       });
     }
+    // console.log("discountLimit using get():", salesOrderItems.discountLimit.value);
 
     return salesOrder;
   }
@@ -770,10 +797,12 @@ export class PosComponent
       taxValue: [item.salesOrderItemTaxes.map(tax => tax.taxId)],
       unitId: [item.unitId, [Validators.required]],
       discountPercentage: [item.discountPercentage || 0],
+      discountLimit: [item.discountLimit || 0],
       productName: [item.product?.name],  // Ensure this field is populated
     });
+    // console.log("discountLimit using get():", formGroup.get('discountLimit')?.value);
 
-    console.log("Product Name in FormGroup:", formGroup.value.productName);
+    console.log("Product Name in FormGroup:", formGroup.value);
 
     this.unitsMap[index] = this.unitConversationlist.filter(
       (c) => c.id === item.unitId || c.parentId === item.unitId

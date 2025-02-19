@@ -96,6 +96,9 @@
                                                                 <th class="table-column-100">
                                                                     {{'DISCOUNT' | translate}}%
                                                                 </th>
+                                                                <th class="table-column-100">
+                                                                    {{'DISCOUNT_Limit' | translate}}%
+                                                                </th>
                                                                 <th style="display:none;" class="table-column-100">
                                                                     {{'TAX' | translate}}
                                                                 </th>
@@ -182,6 +185,15 @@
                                                                         *ngIf="salesOrderItem.get('discountPercentage').errors?.min">
                                                                         {{"DISCOUNT_SHOULD_BE_MORE_THEN_0" | translate}}
                                                                     </div>
+                                                                </td>
+                                                                <td>
+                                                                    <p class="form-control disabled" style="margin: 0; opacity: 1; background-color: #e9ecef;">
+                                                                        {{ salesOrderItem.get('discountLimit').value }}
+                                                                    </p>
+                                                                    <div class="text-danger" *ngIf="salesOrderItem.get('discountPercentage').errors?.exceededLimit">
+                                                                        {{'DISCOUNT_EXCEEDS_LIMIT' | translate}}
+                                                                      </div>
+                                                                      
                                                                 </td>
                                                                 <td style="display:none;">
                                                                     <mat-select [dir]="langDir"

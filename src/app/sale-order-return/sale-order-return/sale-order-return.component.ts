@@ -209,7 +209,8 @@ super(translationService);
       taxValue: [{ value: taxs, disabled: true }],
       unitId: [{ value: salesOrderItem.unitId, disabled: true }],
       warehouseId:  [{ value: salesOrderItem.warehouseId, disabled: true }],
-      discountPercentage: [{ value: salesOrderItem.discountPercentage, disabled: true }]
+      discountPercentage: [{ value: salesOrderItem.discountPercentage, disabled: true }],
+      discountLimit: [{ value: salesOrderItem.discountLimit, disabled: true }]
     });
     this.unitsMap[index] = [... this.route.snapshot.data['units']];
     this.warehouseMap[index] =  [... this.route.snapshot.data['warehouses']];
@@ -402,6 +403,7 @@ super(translationService);
           {
             discount: parseFloat(this.quantitiesUnitPriceTaxPipe.transform(so.returnquantity, so.unitPrice, so.discountPercentage)),
             discountPercentage: so.discountPercentage,
+            discountLimit : so.discountLimit,
             productId: so.productId,
             unitId:so.unitId,
             warehouseId: so.warehouseId,

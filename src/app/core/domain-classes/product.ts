@@ -26,5 +26,6 @@ export interface Product {
     categoryName?: string;
     unitName?: string;
     warehouseId?:string; 
+    discountLimit? : 5;
 }
 

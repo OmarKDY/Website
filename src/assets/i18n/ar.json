@@ -3,6 +3,8 @@
   "GL_TITLE":"الحسابات",
   "Stock_Taking":"جرد المخزون",
   "Stock_Transfer":"تحويل مخزني",
+  "DISCOUNT_Limit":"حد الخصم",
+  "DISCOUNT_EXCEEDS_LIMIT":"الخصم تخطي الحد المسموح",
   "INV_TITLE":"المخازن",
   "SALES_TITLE":"المبيعات",
   "PURCHASE_TITLE":"المشتريات",

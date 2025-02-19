@@ -212,7 +212,8 @@ export class SalesOrderAddEditComponent extends BaseComponent {
       unitId: [salesOrderItem.unitId, [Validators.required]],
       warehouseId: [salesOrderItem.warehouseId],
 
-      discountPercentage: [salesOrderItem.discountPercentage]
+      discountPercentage: [salesOrderItem.discountPercentage],
+      discountLimit: [salesOrderItem.discountLimit]
     });
     this.unitsMap[index] = this.unitConversationlist.filter(c => c.id == salesOrderItem.product.unitId || c.parentId == salesOrderItem.product.unitId);
     this.taxsMap[index] = [... this.route.snapshot.data['taxs']];
@@ -230,7 +231,8 @@ export class SalesOrderAddEditComponent extends BaseComponent {
       taxValue: [null],
       unitId: ['', [Validators.required]],
       warehouseId: [''],
-      discountPercentage: [0,[Validators.min(0)]]
+      discountPercentage: [0,[Validators.min(0)]],
+      discountLimit: [0,[Validators.min(0)]]
     });
     // this.unitsMap[index] = [... this.route.snapshot.data['units']];
     this.taxsMap[index] = [... this.route.snapshot.data['taxs']];
@@ -500,6 +502,7 @@ export class SalesOrderAddEditComponent extends BaseComponent {
           {
             discount: parseFloat(this.quantitiesUnitPriceTaxPipe.transform(so.quantity, so.unitPrice, so.discountPercentage)),
             discountPercentage: so.discountPercentage,
+            discountLimit : so.discountLimit,
             productId: so.productId,
             unitId: so.unitId,
             warehouseId: so.warehouseId,

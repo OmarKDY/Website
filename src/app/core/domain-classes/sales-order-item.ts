@@ -14,6 +14,7 @@ export interface SalesOrderItem {
   discount: number;
   product?: Product;
   discountPercentage: number;
+  discountLimit?: number;
   status?: PurchaseOrderStatusEnum;
   unitName?: string;
   salesOrderItemTaxes: SalesOrderItemTax[];
